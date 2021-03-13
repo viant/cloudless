@@ -28,10 +28,10 @@ func Lookup(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 
 	instances := make([]cluster.Instance, 0)
 	for _, inst := range gcpInstances.Items {
-		if match(inst.Tags.Items, criteria.Tags) {
+		if match(inst.Tags.Items, criteria.Tags) && inst.Status == "RUNNING" {
 			instances = append(instances, cluster.Instance{
 				Name:      inst.Name,
-				PrivateIP: inst.Hostname,
+				PrivateIP: inst.NetworkInterfaces[0].NetworkIP,
 			})
 		}
 
