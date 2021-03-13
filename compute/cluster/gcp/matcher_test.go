@@ -28,7 +28,7 @@ func TestMatcher(t *testing.T) {
 	}
 
 	for _, useCase := range useCases {
-		ips, err := Lookup(&useCase.criteria)
+		ips, err := Match(&useCase.criteria)
 		assert.Nil(t, err, useCase.description)
 		fmt.Printf("IPs: %+v\n", ips)
 	}

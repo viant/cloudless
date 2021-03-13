@@ -7,7 +7,11 @@ import (
 	"github.com/viant/cloudless/compute/cluster"
 )
 
-func Lookup(criteria *cluster.Criteria) ([]cluster.Instance, error) {
+func init() {
+	cluster.Register("AWS", Match)
+}
+
+func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 	svc := ec2.New(session.New())
 	svc.Config.Region = &criteria.Region
 

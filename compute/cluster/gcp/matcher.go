@@ -7,7 +7,11 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-func Lookup(criteria *cluster.Criteria) ([]cluster.Instance, error) {
+func init() {
+	cluster.Register("GCP", Match)
+}
+
+func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 
 	ctx := context.Background()
 	client, err := google.DefaultClient(ctx, compute.ComputeScope)
