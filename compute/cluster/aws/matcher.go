@@ -10,7 +10,6 @@ import (
 func Lookup(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 	svc := ec2.New(session.New())
 	svc.Config.Region = &criteria.Region
-	//convert tags to a slice of pointers
 
 	input := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
@@ -29,12 +28,12 @@ func Lookup(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 	instances := make([]cluster.Instance, 0)
 	for i := range result.Reservations {
 		for _, inst := range result.Reservations[i].Instances {
-			instance := cluster.Instance{}
 			if *inst.State.Name == "running" {
-				instance.Name = *inst.InstanceId
-				instance.PrivateIP = *inst.PrivateIpAddress
+				instances = append(instances, cluster.Instance{
+					Name:      *inst.InstanceId,
+					PrivateIP: *inst.PrivateIpAddress,
+				})
 			}
-			instances = append(instances, instance)
 		}
 	}
 	return instances, nil

@@ -8,7 +8,6 @@ type Cluster struct {
 type Discovery struct {
 	Api     string
 	Cluster string
-	Zone    string
 	Criteria
 	HealthChecks []HealthCheck
 }
