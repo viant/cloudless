@@ -7,6 +7,8 @@ import (
 	"github.com/viant/cloudless/compute/cluster"
 )
 
+const okStatus = "running"
+
 func init() {
 	cluster.Register("AWS", Match)
 }
@@ -32,10 +34,11 @@ func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 	instances := make([]cluster.Instance, 0)
 	for i := range result.Reservations {
 		for _, inst := range result.Reservations[i].Instances {
-			if *inst.State.Name == "running" {
+			if *inst.State.Name == okStatus {
 				instances = append(instances, cluster.Instance{
 					Name:      *inst.InstanceId,
 					PrivateIP: *inst.PrivateIpAddress,
+					StartTime: *inst.LaunchTime,
 				})
 			}
 		}
