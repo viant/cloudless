@@ -12,15 +12,26 @@ func Register(api string, fn Match) {
 	registry[api] = fn
 }
 
-func ClusterMatch(c *Cluster) error {
-	matchFn, ok := registry[c.Api]
+type Service struct {
+}
+
+func (s *Service) Discover(discovery *Discovery) (*Cluster, error) {
+	matchFn, ok := registry[discovery.Api]
 	if !ok {
-		return fmt.Errorf(" invalid API: %s", c.Api)
+		return nil, fmt.Errorf(" invalid API: %s", discovery.Api)
 	}
-	instances, err := matchFn(&c.Criteria)
+	instances, err := matchFn(&discovery.Criteria)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	c.Instances = instances
-	return nil
+
+	// health check
+	return &Cluster{
+		Instances: s.filterByHealth(instances, discovery.HealthChecks),
+	}, nil
+
+}
+
+func (s Service) filterByHealth(instances []Instance, checks []HealthCheck) []Instance {
+	return instances
 }
