@@ -18,40 +18,37 @@ func init() {
 func TestMatcher(t *testing.T) {
 	var useCases = []struct {
 		description string
-		cluster     cluster.Cluster
+		cluster.Discovery
 	}{
 		{
 			description: "AWS test",
-			cluster: cluster.Cluster{
-				Discovery: cluster.Discovery{
-					Api:     "AWS",
-					Cluster: "Cluster1",
-					Criteria: cluster.Criteria{
-						Region: "us-west-2",
-						Tags:   []string{"bidder"},
-					},
+			Discovery: cluster.Discovery{
+				Api:     "AWS",
+				Cluster: "Cluster1",
+				Criteria: cluster.Criteria{
+					Region: "us-west-2",
+					Tags:   []string{"bidder"},
 				},
 			},
 		},
 		{
 			description: "GCP test",
-			cluster: cluster.Cluster{
-				Discovery: cluster.Discovery{
-					Api:     "GCP",
-					Cluster: "Cluster2",
-					Criteria: cluster.Criteria{
-						Project: "viant-e2e",
-						Zone:    "us-east1-b",
-						Tags:    []string{"aerospike"},
-					},
+			Discovery: cluster.Discovery{
+				Api:     "GCP",
+				Cluster: "Cluster2",
+				Criteria: cluster.Criteria{
+					Project: "viant-e2e",
+					Zone:    "us-east1-b",
+					Tags:    []string{"aerospike"},
 				},
 			},
 		},
 	}
 
+	s := &cluster.Service{}
 	for _, useCase := range useCases {
-		err := cluster.ClusterMatch(&useCase.cluster)
+		cluster, err := s.Discover(&useCase.Discovery)
 		assert.Nil(t, err, useCase.description)
-		fmt.Printf("Cluster: %+v\n", useCase.cluster)
+		fmt.Printf("Cluster: %+v\n", cluster)
 	}
 }
