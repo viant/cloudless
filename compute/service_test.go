@@ -8,6 +8,7 @@ import (
 	_ "github.com/viant/cloudless/compute/cluster/gcp"
 	"os"
 	"testing"
+	"time"
 )
 
 func init() {
@@ -29,6 +30,11 @@ func TestMatcher(t *testing.T) {
 					Region: "us-west-2",
 					Tags:   []string{"bidder"},
 				},
+				HealthChecks: []cluster.HealthCheck{
+					{
+						MinAge: time.Duration(time.Minute * 10),
+					},
+				},
 			},
 		},
 		{
@@ -40,6 +46,11 @@ func TestMatcher(t *testing.T) {
 					Project: "viant-e2e",
 					Zone:    "us-east1-b",
 					Tags:    []string{"aerospike"},
+				},
+				HealthChecks: []cluster.HealthCheck{
+					{
+						MinAge: time.Duration(time.Minute * 10),
+					},
 				},
 			},
 		},

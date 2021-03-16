@@ -1,5 +1,7 @@
 package cluster
 
+import "time"
+
 type Cluster struct {
 	Discovery
 	Instances []Instance
@@ -17,4 +19,5 @@ type HealthCheck struct {
 	TimeoutMs      int
 	ExpectedStatus int
 	MaxRetries     int
+	MinAge         time.Duration
 }

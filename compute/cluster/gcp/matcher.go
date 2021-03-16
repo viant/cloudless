@@ -5,7 +5,10 @@ import (
 	"github.com/viant/cloudless/compute/cluster"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/compute/v1"
+	"time"
 )
+
+const okStatus = "RUNNING"
 
 func init() {
 	cluster.Register("GCP", Match)
@@ -32,10 +35,12 @@ func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 
 	instances := make([]cluster.Instance, 0)
 	for _, inst := range gcpInstances.Items {
-		if match(inst.Tags.Items, criteria.Tags) && inst.Status == "RUNNING" {
+		tm, err := time.Parse(time.RFC3339, inst.LastStartTimestamp)
+		if match(inst.Tags.Items, criteria.Tags) && inst.Status == okStatus && err == nil {
 			instances = append(instances, cluster.Instance{
 				Name:      inst.Name,
 				PrivateIP: inst.NetworkInterfaces[0].NetworkIP,
+				StartTime: tm,
 			})
 		}
 

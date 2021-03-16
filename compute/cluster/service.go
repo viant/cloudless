@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+	"time"
 )
 
 type Match func(criteria *Criteria) ([]Instance, error)
@@ -33,5 +34,19 @@ func (s *Service) Discover(discovery *Discovery) (*Cluster, error) {
 }
 
 func (s Service) filterByHealth(instances []Instance, checks []HealthCheck) []Instance {
+	if len(checks) > 0 {
+		return s.filterByAge(instances, checks[0].MinAge)
+	}
 	return instances
+}
+
+func (s *Service) filterByAge(instances []Instance, age time.Duration) []Instance {
+	n := 0
+	for _, inst := range instances {
+		if time.Now().Sub(inst.StartTime) >= age {
+			instances[n] = inst
+			n++
+		}
+	}
+	return instances[:n]
 }
