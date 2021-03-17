@@ -28,6 +28,7 @@ func (s *Service) Discover(discovery *Discovery) (*Cluster, error) {
 
 	// health check
 	return &Cluster{
+		Discovery: *discovery,
 		Instances: s.filterByHealth(instances, discovery.HealthChecks),
 	}, nil
 

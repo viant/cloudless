@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/viant/cloudless/compute/cluster"
 	_ "github.com/viant/cloudless/compute/cluster/aws"
+	_ "github.com/viant/cloudless/compute/cluster/consul"
 	_ "github.com/viant/cloudless/compute/cluster/gcp"
 	"os"
 	"testing"
@@ -51,6 +52,17 @@ func TestMatcher(t *testing.T) {
 					{
 						MinAge: time.Duration(time.Minute * 10),
 					},
+				},
+			},
+		},
+		{
+			description: "CONSUL test",
+			Discovery: cluster.Discovery{
+				Api:     "CONSUL",
+				Cluster: "Cluster3",
+				Criteria: cluster.Criteria{
+					ConsulURL:     "consul.vianttech.com:8500",
+					ConsulService: "consul",
 				},
 			},
 		},
