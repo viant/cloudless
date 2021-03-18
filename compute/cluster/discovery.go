@@ -2,10 +2,7 @@ package cluster
 
 import "time"
 
-type Cluster struct {
-	Discovery
-	Instances []Instance
-}
+
 
 type Discovery struct {
 	Api     string
@@ -22,4 +19,8 @@ type HealthCheck struct {
 	MinAge         time.Duration
 }
 
-type Clusters []Cluster
+type Discoveries []Discovery
+
+
+
+
