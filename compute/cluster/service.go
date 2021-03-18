@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -21,7 +22,7 @@ func New() *Service {
 }
 
 func (s *Service) Discover(discovery *Discovery) (*Cluster, error) {
-	matchFn, ok := registry[discovery.Api]
+	matchFn, ok := registry[strings.ToUpper(discovery.Api)]
 	if !ok {
 		return nil, fmt.Errorf(" invalid API: %s", discovery.Api)
 	}
