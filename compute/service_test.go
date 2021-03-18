@@ -61,8 +61,8 @@ func TestMatcher(t *testing.T) {
 				Api:     "CONSUL",
 				Cluster: "Cluster3",
 				Criteria: cluster.Criteria{
-					ConsulURL:     "consul.vianttech.com:8500",
-					ConsulService: "consul",
+					URL:     "consul.vianttech.com:8500",
+					Service: "consul",
 				},
 			},
 		},

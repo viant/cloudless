@@ -21,3 +21,5 @@ type HealthCheck struct {
 	MaxRetries     int
 	MinAge         time.Duration
 }
+
+type Clusters []Cluster

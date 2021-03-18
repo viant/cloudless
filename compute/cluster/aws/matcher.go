@@ -7,12 +7,6 @@ import (
 	"github.com/viant/cloudless/compute/cluster"
 )
 
-const okStatus = "running"
-
-func init() {
-	cluster.Register("AWS", Match)
-}
-
 func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 	svc := ec2.New(session.New())
 	svc.Config.Region = &criteria.Region

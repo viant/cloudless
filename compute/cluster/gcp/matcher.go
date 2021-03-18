@@ -8,12 +8,6 @@ import (
 	"time"
 )
 
-const okStatus = "RUNNING"
-
-func init() {
-	cluster.Register("GCP", Match)
-}
-
 func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 
 	ctx := context.Background()

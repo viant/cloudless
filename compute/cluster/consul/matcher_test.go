@@ -15,8 +15,8 @@ func TestMatcher(t *testing.T) {
 		{
 			description: "Unit test",
 			criteria: cluster.Criteria{
-				ConsulURL:     "consul.vianttech.com:8500",
-				ConsulService: "consul",
+				URL:     "consul.vianttech.com:8500",
+				Service: "consul",
 			},
 		},
 	}

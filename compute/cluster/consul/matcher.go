@@ -5,22 +5,16 @@ import (
 	"github.com/viant/cloudless/compute/cluster"
 )
 
-const okStatus = "passing"
-
-func init() {
-	cluster.Register("CONSUL", Match)
-}
-
 func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 
 	cfg := api.DefaultConfig()
-	cfg.Address = criteria.ConsulURL
+	cfg.Address = criteria.URL
 	client, err := api.NewClient(cfg)
 	if err != nil {
 		return nil, err
 	}
 	cat := client.Catalog()
-	consulNodes, _, err := cat.Service(criteria.ConsulService, "", nil)
+	consulNodes, _, err := cat.Service(criteria.Service, "", nil)
 	if err != nil {
 		return nil, err
 	}
