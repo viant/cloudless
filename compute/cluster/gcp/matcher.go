@@ -4,14 +4,14 @@ import (
 	"context"
 	"github.com/viant/cloudless/compute/cluster"
 	"golang.org/x/oauth2/google"
-	comp "google.golang.org/api/compute/v1"
+	"google.golang.org/api/compute/v1"
 	"time"
 )
 
 func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 
 	ctx := context.Background()
-	client, err := google.DefaultClient(ctx, comp.ComputeScope)
+	client, err := google.DefaultClient(ctx, compute.ComputeScope)
 	if err != nil {
 		return nil, err
 	}

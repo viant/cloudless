@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/ppoudyal/.secret/viant-e2e.json")
+	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/vcarey/gbq.json")
 }
 
 func TestMatcher(t *testing.T) {
