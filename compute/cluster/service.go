@@ -16,6 +16,10 @@ func Register(api string, fn Match) {
 type Service struct {
 }
 
+func New() *Service {
+	return &Service{}
+}
+
 func (s *Service) Discover(discovery *Discovery) (*Cluster, error) {
 	matchFn, ok := registry[discovery.Api]
 	if !ok {
