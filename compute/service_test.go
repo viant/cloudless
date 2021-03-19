@@ -33,7 +33,9 @@ func TestMatcher(t *testing.T) {
 				},
 				HealthChecks: []cluster.HealthCheck{
 					{
-						MinAge: time.Duration(time.Minute * 10),
+						URL:       "http://{IP}:8080/d/1x1.jpg",
+						TimeoutMs: 1000,
+						MinAge:    time.Duration(time.Minute * 10),
 					},
 				},
 			},
@@ -68,8 +70,8 @@ func TestMatcher(t *testing.T) {
 		},
 	}
 
-	s := &cluster.Service{}
-	for _, useCase := range useCases {
+	s := cluster.New()
+	for _, useCase := range useCases[0:1] {
 		cluster, err := s.Discover(&useCase.Discovery)
 		assert.Nil(t, err, useCase.description)
 		fmt.Printf("Cluster: %+v\n", cluster)
