@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -40,8 +41,13 @@ func (s *Service) Discover(discovery *Discovery) (*Cluster, error) {
 }
 
 func (s Service) filterByHealth(instances []Instance, checks []HealthCheck) []Instance {
-	if len(checks) > 0 {
-		return s.filterByAge(instances, checks[0].MinAge)
+	for _, hc := range checks {
+		if hc.MinAge > 0 {
+			instances = s.filterByAge(instances, hc.MinAge)
+		}
+		if hc.URL != "" {
+			instances = s.filterByHttp(instances, hc)
+		}
 	}
 	return instances
 }
@@ -55,4 +61,38 @@ func (s *Service) filterByAge(instances []Instance, age time.Duration) []Instanc
 		}
 	}
 	return instances[:n]
+}
+
+func (s *Service) filterByHttp(instances []Instance, hc HealthCheck) []Instance {
+	ipState := make([]chan bool, len(instances))
+	for i, _ := range ipState {
+		ipState[i] = make(chan bool)
+	}
+
+	for i, inst := range instances {
+		go checkIP(inst.PrivateIP, hc, ipState[i])
+	}
+
+	n := 0
+	for i, inst := range instances {
+		if <-ipState[i] {
+			instances[n] = inst
+			n++
+		}
+	}
+	fmt.Printf("instances: %v -> %v\n", len(instances), n)
+	return instances[:n]
+}
+
+func checkIP(ip string, hc HealthCheck, result chan bool) {
+	httpClient := &http.Client{
+		Timeout: time.Millisecond * time.Duration(hc.TimeoutMs),
+	}
+	resp, err := httpClient.Get(strings.Replace(hc.URL, ipVar, ip, 1))
+	if err != nil {
+		result <- false
+		return
+	}
+	resp.Body.Close()
+	result <- resp.StatusCode == 200
 }
