@@ -94,5 +94,5 @@ func checkIP(ip string, hc HealthCheck, result chan bool) {
 		return
 	}
 	resp.Body.Close()
-	result <- resp.StatusCode == 200
+	result <- resp.StatusCode == hc.ExpectedStatus
 }

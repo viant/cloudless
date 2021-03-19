@@ -33,9 +33,10 @@ func TestMatcher(t *testing.T) {
 				},
 				HealthChecks: []cluster.HealthCheck{
 					{
-						URL:       "http://{IP}:8080/d/1x1.jpg",
-						TimeoutMs: 1000,
-						MinAge:    time.Duration(time.Minute * 10),
+						URL:            "http://{IP}:8080/d/1x1.jpg",
+						TimeoutMs:      1000,
+						ExpectedStatus: 200,
+						MinAge:         time.Minute * 10,
 					},
 				},
 			},
