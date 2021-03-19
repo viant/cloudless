@@ -7,6 +7,7 @@ import (
 	_ "github.com/viant/cloudless/compute/cluster/aws"
 	_ "github.com/viant/cloudless/compute/cluster/consul"
 	_ "github.com/viant/cloudless/compute/cluster/gcp"
+	_ "github.com/viant/cloudless/compute/cluster/local"
 	"os"
 	"testing"
 	"time"
@@ -69,10 +70,18 @@ func TestMatcher(t *testing.T) {
 				},
 			},
 		},
+		{
+			description: "local test",
+			Discovery: cluster.Discovery{
+				Api:      "local",
+				Cluster:  "local",
+				Criteria: cluster.Criteria{},
+			},
+		},
 	}
 
 	s := cluster.New()
-	for _, useCase := range useCases[0:1] {
+	for _, useCase := range useCases[3:4] {
 		cluster, err := s.Discover(&useCase.Discovery)
 		assert.Nil(t, err, useCase.description)
 		fmt.Printf("Cluster: %+v\n", cluster)
