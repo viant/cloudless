@@ -8,8 +8,9 @@ import (
 )
 
 func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
-	svc := ec2.New(session.New())
-	svc.Config.Region = &criteria.Region
+	sess := session.New()
+	sess.Config.Region = &criteria.Region
+	svc := ec2.New(sess)
 
 	input := &ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
