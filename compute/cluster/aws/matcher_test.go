@@ -21,7 +21,7 @@ func TestMatcher(t *testing.T) {
 			description: "Unit test",
 			criteria: cluster.Criteria{
 				Region: "us-west-2",
-				Tags:   []string{"bidder"},
+				Tags:   []string{"service:bidder", "environment:production"},
 			},
 		},
 	}
