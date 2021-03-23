@@ -14,7 +14,8 @@ into reusable components.
 
 
 ### Serverless components
- - [Cloud data processor](data/processor/README.md)
+- [Cloud data processor](data/processor/README.md)
+- [Cloud cluster discovery](compute/README.md)
 
 ## License
 
