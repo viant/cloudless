@@ -25,7 +25,8 @@ Google and Consul environments.
 To discover a cluster, one has to pass the following parameters:
 
 - Cluster name (informational)
-- API ("AWS", "GCP", "CONSUL"), a case insensitive string
+- API ("AWS", "GCP", "CONSUL", "LOCAL"), a case insensitive string. "LOCAL" can be used for
+  unit testing.  It returns a single node cluster with the IP address of 127.0.0.1.
 - Criteria
 - Health checks
 
