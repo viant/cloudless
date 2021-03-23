@@ -42,6 +42,9 @@ func (s *Service) Discover(discovery *Discovery) (*Cluster, error) {
 
 func (s Service) filterByHealth(instances []Instance, checks []HealthCheck) []Instance {
 	for _, hc := range checks {
+		if hc.MinAgeSec > 0 {
+			hc.MinAge = time.Duration(hc.MinAgeSec) * time.Second
+		}
 		if hc.MinAge > 0 {
 			instances = s.filterByAge(instances, hc.MinAge)
 		}
