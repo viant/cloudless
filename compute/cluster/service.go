@@ -84,7 +84,7 @@ func (s *Service) filterByHttp(instances []Instance, hc HealthCheck) []Instance 
 			n++
 		}
 	}
-	fmt.Printf("by http instances: %v -> %v\n", len(instances), n)
+	//fmt.Printf("by http instances: %v -> %v\n", len(instances), n)
 	return instances[:n]
 }
 
