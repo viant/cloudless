@@ -15,7 +15,7 @@ import (
 
 func init() {
 	os.Setenv("AWS_SDK_LOAD_CONFIG", "1")
-	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/vcarey/gbq.json")
+	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/xyz/gbq.json")
 }
 
 func TestMatcher(t *testing.T) {
@@ -29,13 +29,13 @@ func TestMatcher(t *testing.T) {
 				Api:     "AWS",
 				Cluster: "Cluster1",
 				Criteria: cluster.Criteria{
-					Region: "us-west-2",
-					Tags:   []string{"bidder"},
+					Region: "us-east-1",
+					Tags:   []string{"xyz"},
 				},
 				HealthChecks: []cluster.HealthCheck{
 					{
 						URL:            "http://{IP}:8080/d/1x1.jpg",
-						TimeoutMs:      1000,
+						TimeoutMs:      4500,
 						MaxRetries:     3,
 						ExpectedStatus: 200,
 						MinAge:         time.Minute * 10,
@@ -49,7 +49,7 @@ func TestMatcher(t *testing.T) {
 				Api:     "GCP",
 				Cluster: "Cluster2",
 				Criteria: cluster.Criteria{
-					Project: "viant-e2e",
+					Project: "abc",
 					Zone:    "us-east1-b",
 					Tags:    []string{"aerospike"},
 				},
@@ -66,7 +66,7 @@ func TestMatcher(t *testing.T) {
 				Api:     "CONSUL",
 				Cluster: "Cluster3",
 				Criteria: cluster.Criteria{
-					URL:     "consul.vianttech.com:8500",
+					URL:     "consul.company.com:8500",
 					Service: "consul",
 				},
 			},

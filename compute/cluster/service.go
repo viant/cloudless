@@ -63,6 +63,7 @@ func (s *Service) filterByAge(instances []Instance, age time.Duration) []Instanc
 			n++
 		}
 	}
+	//fmt.Printf("by age instances: %v -> %v\n", len(instances), n)
 	return instances[:n]
 }
 
@@ -83,7 +84,7 @@ func (s *Service) filterByHttp(instances []Instance, hc HealthCheck) []Instance 
 			n++
 		}
 	}
-	//fmt.Printf("instances: %v -> %v\n", len(instances), n)
+	fmt.Printf("by http instances: %v -> %v\n", len(instances), n)
 	return instances[:n]
 }
 
@@ -99,6 +100,9 @@ func checkIP(ip string, hc HealthCheck, result chan bool) {
 		if err == nil && resp.StatusCode == hc.ExpectedStatus {
 			break
 		}
+	}
+	if err != nil || resp.StatusCode != hc.ExpectedStatus {
+		fmt.Printf("%v still bad: %v\n", ip, err)
 	}
 	if err != nil {
 		result <- false

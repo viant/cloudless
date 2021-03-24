@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/vcarey/gbq.json")
+	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/Users/user/gbq.json")
 }
 
 func TestMatcher(t *testing.T) {
@@ -20,7 +20,7 @@ func TestMatcher(t *testing.T) {
 		{
 			description: "Unit test",
 			criteria: cluster.Criteria{
-				Project: "viant-e2e",
+				Project: "xyz",
 				Zone:    "us-east1-b",
 				Tags:    []string{"aerospike"},
 			},
