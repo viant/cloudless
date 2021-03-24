@@ -91,11 +91,20 @@ func checkIP(ip string, hc HealthCheck, result chan bool) {
 	httpClient := &http.Client{
 		Timeout: time.Millisecond * time.Duration(hc.TimeoutMs),
 	}
-	resp, err := httpClient.Get(strings.Replace(hc.URL, ipVar, ip, 1))
+
+	var resp *http.Response
+	var err error
+	for i := 0; i < hc.MaxRetries+1; i++ {
+		resp, err = httpClient.Get(strings.Replace(hc.URL, ipVar, ip, 1))
+		if err == nil && resp.StatusCode == hc.ExpectedStatus {
+			break
+		}
+	}
 	if err != nil {
 		result <- false
 		return
 	}
+
 	resp.Body.Close()
 	result <- resp.StatusCode == hc.ExpectedStatus
 }

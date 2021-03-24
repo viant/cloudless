@@ -42,7 +42,7 @@ func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 	instances := make([]cluster.Instance, 0)
 	for i := range result.Reservations {
 		for _, inst := range result.Reservations[i].Instances {
-			if !matchKVPAris(inst.Tags, kvPairs) {
+			if !matchKVPairs(inst.Tags, kvPairs) {
 				continue
 			}
 
@@ -58,7 +58,7 @@ func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 	return instances, nil
 }
 
-func matchKVPAris(tags []*ec2.Tag, pairs map[string]string) bool {
+func matchKVPairs(tags []*ec2.Tag, pairs map[string]string) bool {
 	if len(pairs) == 0 {
 		return true
 	}

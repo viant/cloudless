@@ -36,6 +36,7 @@ func TestMatcher(t *testing.T) {
 					{
 						URL:            "http://{IP}:8080/d/1x1.jpg",
 						TimeoutMs:      1000,
+						MaxRetries:     3,
 						ExpectedStatus: 200,
 						MinAge:         time.Minute * 10,
 					},
@@ -81,7 +82,7 @@ func TestMatcher(t *testing.T) {
 	}
 
 	s := cluster.New()
-	for _, useCase := range useCases[3:4] {
+	for _, useCase := range useCases[0:1] {
 		cluster, err := s.Discover(&useCase.Discovery)
 		assert.Nil(t, err, useCase.description)
 		fmt.Printf("Cluster: %+v\n", cluster)
