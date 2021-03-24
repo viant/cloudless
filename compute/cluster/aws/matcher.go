@@ -38,11 +38,11 @@ func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 }
 
 func buildFilters(criteria *cluster.Criteria) (map[string]bool, []*ec2.Filter) {
-	var exclusiona = make(map[string]bool)
+	var exclusions = make(map[string]bool)
 	var tags = make(map[string][]*string)
 	for _, tag := range criteria.Tags {
 		if tag[0:1] == "!" {
-			exclusiona[tag[1:]] = true
+			exclusions[tag[1:]] = true
 			continue
 		}
 		pair := strings.SplitN(tag, ":", 2)
@@ -62,7 +62,7 @@ func buildFilters(criteria *cluster.Criteria) (map[string]bool, []*ec2.Filter) {
 			Values: v,
 		})
 	}
-	return exclusiona, filters
+	return exclusions, filters
 }
 
 func exclude(tags []*ec2.Tag, exclusions map[string]bool) bool {
