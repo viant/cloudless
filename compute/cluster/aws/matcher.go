@@ -21,11 +21,11 @@ func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 	instances := make([]cluster.Instance, 0)
 	for i := range result.Reservations {
 		for _, inst := range result.Reservations[i].Instances {
-			if exclude(inst.Tags, exclusions) {
-				continue
-			}
 
 			if *inst.State.Name == okStatus {
+				if !matchZone(criteria, inst) || exclude(inst.Tags, exclusions) {
+					continue
+				}
 				instances = append(instances, cluster.Instance{
 					Name:      *inst.InstanceId,
 					PrivateIP: *inst.PrivateIpAddress,
@@ -35,6 +35,16 @@ func Match(criteria *cluster.Criteria) ([]cluster.Instance, error) {
 		}
 	}
 	return instances, nil
+}
+
+func matchZone(criteria *cluster.Criteria, inst *ec2.Instance) bool {
+	if criteria.AvailabilityZone == "" {
+		return true
+	}
+	if inst.Placement == nil {
+		return false
+	}
+	return criteria.AvailabilityZone == *inst.Placement.AvailabilityZone
 }
 
 func buildFilters(criteria *cluster.Criteria) (map[string]bool, []*ec2.Filter) {
