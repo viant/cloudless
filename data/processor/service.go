@@ -41,14 +41,12 @@ func (s *Service) Do(ctx context.Context, request *Request) Reporter {
 	}
 	response.SourceURL = request.SourceURL
 	response.StartTime = request.StartTime
-	defer func() {
-		//use new context in case the other got deadline exceeded
-		if err := s.onDone(context.Background(), request); err != nil {
-			response.LogError(err)
-		}
-	}()
 	err := s.do(ctx, request, reporter)
 	if err != nil {
+		response.LogError(err)
+	}
+	if err == nil {
+		err := s.onDone(context.Background(), request)
 		response.LogError(err)
 	}
 	return reporter
