@@ -9,6 +9,7 @@ import (
 	"github.com/viant/cloudless/data/processor"
 	"github.com/viant/cloudless/data/processor/adapter/gcp"
 	"log"
+	"os"
 )
 
 //Service represents subscriber service
@@ -59,6 +60,9 @@ func (s *Service) handleMessage(ctx context.Context, msg *pubsub.Message, URL st
 		return
 	}
 	URL = gsEvent.URL()
+	if os.Getenv("DEBUG_MSG") != "" {
+		fmt.Printf("%s\n", msg.Data)
+	}
 	reqContext := context.Background()
 	request, err := gsEvent.NewRequest(reqContext, s.fs, &s.config.Config)
 	if err != nil {
@@ -73,7 +77,10 @@ func (s *Service) handleMessage(ctx context.Context, msg *pubsub.Message, URL st
 	}
 	reporter := s.processor.Do(reqContext, request)
 	msg.Ack()
-	output, _ := json.Marshal(reporter)
+	output, err := json.Marshal(reporter)
+	if err != nil {
+		fmt.Printf("failed marshal reported %v\n", reporter)
+	}
 	fmt.Printf("%s\n", output)
 }
 
