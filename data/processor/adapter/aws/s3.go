@@ -29,6 +29,7 @@ func (e S3Event) NewRequest(ctx context.Context, fs afs.Service, cfg *processor.
 		}
 		options = append(options, option.NewStream(cfg.ReaderBufferSize, int(object.Size())))
 	}
+	options = append(options, option.NewRegion(e.Records[0].AWSRegion))
 	reader, err := ioutil.OpenURL(ctx, fs, URL, options...)
 	if err != nil {
 		return nil, err
