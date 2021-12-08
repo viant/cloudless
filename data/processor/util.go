@@ -21,12 +21,12 @@ func expandURL(URL string, time time.Time) string {
 func expandRetryURL(URL string, time time.Time, retry int) string {
 	URL = expandURL(URL, time)
 	ext := path.Ext(URL)
-	if index := strings.LastIndex(URL, retryFragment); index > -1 {
+	if index := strings.LastIndex(URL, RetryFragment); index > -1 {
 		URL = URL[:index]
 	} else {
 		URL = URL[:len(URL)-len(ext)]
 	}
 
-	return URL + retryFragment + fmt.Sprintf("%02d", retry+1) + ext
+	return URL + RetryFragment + fmt.Sprintf("%02d", retry+1) + ext
 
 }

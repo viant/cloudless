@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
+	"github.com/viant/gmetric"
 	"github.com/viant/toolbox"
 	"io"
+	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,8 +20,9 @@ import (
 
 //Service represents processing service
 type Service struct {
-	Config *Config
-	fs     afs.Service
+	Config  *Config
+	Metrics *gmetric.Service
+	fs      afs.Service
 	Processor
 	reporterProvider func() Reporter
 }
@@ -132,6 +136,22 @@ func (s *Service) makeURL(response *Response, request *Request) {
 	retryURL = expandRetryURL(retryURL, request.StartTime, request.Retry())
 	response.RetryURL = retryURL
 }
+
+func (s *Service) StartMetricsEndpoint() {
+	if s.Config.MetricPort == 0 {
+		fmt.Printf("metric endpoint is off")
+		return
+	}
+	mux := http.NewServeMux()
+	mux.Handle(metricURI, gmetric.NewHandler(metricURI, s.Metrics))
+	server := &http.Server{
+		Addr:    ":" + strconv.Itoa(s.Config.MetricPort),
+		Handler: mux,
+	}
+	fmt.Printf("starting metric endpoint: %v", s.Config.MetricPort)
+	go server.ListenAndServe()
+}
+
 
 func (s *Service) closeWriters(response *Response, retryWriter *Writer, corruptionWriter *Writer) {
 	if retryWriter != nil {
@@ -344,9 +364,22 @@ func (s *Service) sortInput(reader io.Reader, response *Response) (io.Reader, er
 	return s.Config.Sort.Order(reader, s.Config)
 }
 
-// New creates a processing service
+// New creates data processing service
 func New(config *Config, fs afs.Service, processor Processor, reporterProvider func() Reporter) *Service {
 	return &Service{Config: config,
+		Metrics:          gmetric.New(),
+		fs:               fs,
+		Processor:        processor,
+		reporterProvider: reporterProvider,
+	}
+}
+
+
+
+// NewWithMetrics creates data processing service
+func NewWithMetrics(config *Config, fs afs.Service, processor Processor, reporterProvider func() Reporter, metrics *gmetric.Service) *Service {
+	return &Service{Config: config,
+		Metrics:          metrics,
 		fs:               fs,
 		Processor:        processor,
 		reporterProvider: reporterProvider,

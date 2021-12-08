@@ -8,8 +8,12 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/cloudless/data/processor"
 	"github.com/viant/cloudless/data/processor/adapter/aws"
+	"github.com/viant/cloudless/data/processor/stat"
+	"github.com/viant/gmetric"
 	"log"
 	"os"
+	"reflect"
+	"time"
 )
 
 //Service represents sqs service
@@ -19,6 +23,7 @@ type Service struct {
 	queueURL  *string
 	processor *processor.Service
 	fs        afs.Service
+	stats     *gmetric.Operation
 }
 
 //Consume starts consumer
@@ -68,13 +73,22 @@ func (s *Service) deleteMessage(msg *sqs.Message) error {
 }
 
 func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, URL string, fs afs.Service) {
+	recentCounter, onDone, stats := stat.SubscriberBegin(s.stats)
+	defer stat.SubscriberEnd(s.stats, recentCounter, onDone, stats)
+
 	s3Event := &aws.S3Event{}
 	if err := json.Unmarshal([]byte(*msg.Body), s3Event); err != nil {
 		log.Printf("failed to unmarshal GSEvent: %s, due to %v\n", *msg.Body, err)
+		stats.Append(err)
 		return
 	}
 	if len(s3Event.Records) == 0 {
-		s.deleteMessage(msg)
+		err := s.deleteMessage(msg)
+		if err != nil {
+			stats.Append(stat.NegativeAcknowledged)
+		} else {
+			stats.Append(stat.Acknowledged)
+		}
 		fmt.Printf("invalid event: %s\n", *msg.Body)
 		return
 	}
@@ -86,16 +100,30 @@ func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, URL strin
 	if err != nil {
 		//source file has been removed
 		if exists, _ := fs.Exists(ctx, URL); !exists {
-			s.deleteMessage(msg)
+			if err = s.deleteMessage(msg);err != nil {
+				stats.Append(err)
+				stats.Append(stat.NegativeAcknowledged)
+			} else {
+				stats.Append(stat.Acknowledged)
+			}
 			return
 		}
+		stats.Append(err)
+		stats.Append(stat.NegativeAcknowledged)
 		log.Printf("failed to create process request from s3Event: %s, due to %v\n", *msg.Body, err)
 		return
 	}
 	reporter := s.processor.Do(reqContext, request)
-	s.deleteMessage(msg)
+	err = s.deleteMessage(msg)
+	if err != nil {
+		stats.Append(err)
+		stats.Append(stat.NegativeAcknowledged)
+	} else {
+		stats.Append(stat.Acknowledged)
+	}
 	output, err := json.Marshal(reporter)
 	if err != nil {
+		stats.Append(err)
 		fmt.Printf("failed marshal reported %v\n", reporter)
 	}
 	fmt.Printf("%s\n", output)
@@ -117,12 +145,17 @@ func New(config *Config, client *sqs.SQS, processor *processor.Service, fs afs.S
 	if err != nil {
 		return nil, err
 	}
-
-	return &Service{
+	srv :=  &Service{
 		config:    config,
 		sqsClient: client,
 		queueURL:  result.QueueUrl,
 		processor: processor,
 		fs:        fs,
-	}, nil
+	}
+	if srv.config.MetricPort > 0 {
+		srv.processor.StartMetricsEndpoint()
+	}
+	location := reflect.TypeOf(srv).PkgPath()
+	srv.stats = srv.processor.Metrics.MultiOperationCounter(location, stat.SubscriberMetricName, "subscriber performance",time.Microsecond, time.Microsecond, 3 , stat.NewSubscriber())
+	return srv, nil
 }

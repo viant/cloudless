@@ -28,17 +28,17 @@ type (
 		Concurrency         int
 		DestinationURL      string // Service processing data destination URL. This is a template, e.g. $gs://$mybucket/$prefix/$a.dat
 		DestinationCodec    string
-		RetryURL            string // destination for the data to be retried
-		FailedURL           string // destination for the data that has failed max retires
-		CorruptionURL       string /// destination for the corrupted data
-		MaxExecTimeMs       int    // default execution timeMs used when context does not come with deadline
-		OnDone              string //move or delete, (move moves data to process URL,or delete for delete)
-		OnDoneURL           string
-		ReaderBufferSize    int  //if set above zero uses afs Steam option
-		BatchSize           int  //number of data lines passed to processor (1 by default)
-		Sort                Sort //optional sorting config
-		ScannerBufferMB     int  //use in case you see bufio.Scanner: token too long
-
+		RetryURL         string // destination for the data to be retried
+		FailedURL        string // destination for the data that has failed max retires
+		CorruptionURL    string /// destination for the corrupted data
+		MaxExecTimeMs    int    // default execution timeMs used when context does not come with deadline
+		OnDone           string //move or delete, (move moves data to process URL,or delete for delete)
+		OnDoneURL        string
+		ReaderBufferSize int  //if set above zero uses afs Steam option
+		BatchSize        int  //number of data lines passed to processor (1 by default)
+		Sort             Sort //optional sorting config
+		ScannerBufferMB  int  //use in case you see bufio.Scanner: token too long
+		MetricPort       int  //if specified HTTP endpoint port to expose metrics
 	}
 )
 

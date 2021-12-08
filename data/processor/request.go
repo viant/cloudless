@@ -21,11 +21,11 @@ type Request struct {
 //Retry extracts number of retry from URL . It looks after two consecutive digits
 // eg: s3://bucket/prefix/filename-retry05.csv would extract number 5
 func (r *Request) Retry() int {
-	index := strings.LastIndex(r.SourceURL, retryFragment)
+	index := strings.LastIndex(r.SourceURL, RetryFragment)
 	if index == -1 {
 		return 0
 	}
-	retry := r.SourceURL[index+len(retryFragment) : index+len(retryFragment)+2]
+	retry := r.SourceURL[index+len(RetryFragment) : index+len(RetryFragment)+2]
 	return toolbox.AsInt(retry)
 
 }

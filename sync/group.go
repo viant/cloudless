@@ -12,9 +12,11 @@ type Group struct {
 }
 
 func (g *Group) Increment(ctx context.Context) (int, error) {
-	g.fs.Object()
+	//TODO add implementation
+	return 0, nil
 }
 
 func (g *Group) Decrement(ctx context.Context) (int, error) {
-
+	//TODO add implementation
+	return 0, nil
 }
