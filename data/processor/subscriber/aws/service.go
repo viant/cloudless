@@ -48,6 +48,7 @@ func (s *Service) consume() error {
 	if batchSize <= 0 {
 		return nil
 	}
+	fmt.Printf("requesting batch size: %v\n", batchSize)
 	msgs, err := s.sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            s.queueURL,
 		MaxNumberOfMessages: &batchSize,
@@ -58,9 +59,10 @@ func (s *Service) consume() error {
 	if err != nil {
 		return err
 	}
-	for _, m := range msgs.Messages {
+	for i := range msgs.Messages {
+		fmt.Printf("added message %v\n", msgs.Messages[i])
 		atomic.AddInt32(&s.pending, 1)
-		s.messages <- m
+		s.messages <- msgs.Messages[i]
 	}
 	return nil
 }
@@ -68,6 +70,7 @@ func (s *Service) consume() error {
 func (s *Service) handleMessages() {
 	for {
 		msg := <-s.messages
+		fmt.Printf("consume message %+v\n", msg)
 		if msg == nil {
 			time.Sleep(100 * time.Millisecond)
 			continue
