@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"sync/atomic"
 	"time"
 )
 
@@ -24,44 +25,55 @@ type Service struct {
 	processor *processor.Service
 	fs        afs.Service
 	stats     *gmetric.Operation
+	messages chan *sqs.Message
+	pending  int32
 }
 
 //Consume starts consumer
 func (s *Service) Consume(ctx context.Context) error {
 	for {
-		err := s.consume(ctx)
+		err := s.consume()
 		if err != nil {
 			log.Printf("failed to consume: %v\n", err)
 		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
-func (s *Service) consume(ctx context.Context) error {
-	var URL string
-	defer func() {
-		r := recover()
-		if r != nil {
-			fmt.Printf("recover from panic: URL:%v, error: %v", URL, r)
-		}
-	}()
-
-	//fs := afs.New()
+func (s *Service) consume() error {
 	maxNumberOfMessages := int64(s.config.BatchSize)
 	waitTimeSeconds := int64(s.config.WaitTimeSeconds)
 	visibilityTimeout := int64(s.config.VisibilityTimeout)
+	batchSize := maxNumberOfMessages - int64(atomic.LoadInt32(&s.pending))
+	if batchSize <= 0 {
+		return nil
+	}
 	msgs, err := s.sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            s.queueURL,
 		MaxNumberOfMessages: &maxNumberOfMessages,
 		WaitTimeSeconds:     &waitTimeSeconds,
 		VisibilityTimeout:   &visibilityTimeout,
 	})
+
 	if err != nil {
 		return err
 	}
 	for _, m := range msgs.Messages {
-		s.handleMessage(ctx, m, URL, s.fs)
+		atomic.AddInt32(&s.pending, 1)
+		s.messages <- m
 	}
 	return nil
+}
+
+func (s *Service) handleMessages() {
+	for {
+		msg := <-s.messages
+		if msg == nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		go s.handleMessage(context.Background(), msg, s.fs)
+	}
 }
 
 func (s *Service) deleteMessage(msg *sqs.Message) error {
@@ -72,7 +84,15 @@ func (s *Service) deleteMessage(msg *sqs.Message) error {
 	return err
 }
 
-func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, URL string, fs afs.Service) {
+func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, fs afs.Service) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			fmt.Printf("recover from panic: %v for msg: %+v", r, msg)
+		}
+		atomic.AddInt32(&s.pending, -1)
+	}()
+
 	recentCounter, onDone, stats := stat.SubscriberBegin(s.stats)
 	defer stat.SubscriberEnd(s.stats, recentCounter, onDone, stats)
 
@@ -99,8 +119,8 @@ func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, URL strin
 	request, err := s3Event.NewRequest(reqContext, s.fs, &s.config.Config)
 	if err != nil {
 		//source file has been removed
-		if exists, _ := fs.Exists(ctx, URL); !exists {
-			if err = s.deleteMessage(msg);err != nil {
+		if exists, _ := fs.Exists(ctx, request.SourceURL); !exists {
+			if err = s.deleteMessage(msg); err != nil {
 				stats.Append(err)
 				stats.Append(stat.NegativeAcknowledged)
 			} else {
@@ -145,17 +165,19 @@ func New(config *Config, client *sqs.SQS, processor *processor.Service, fs afs.S
 	if err != nil {
 		return nil, err
 	}
-	srv :=  &Service{
+	srv := &Service{
 		config:    config,
 		sqsClient: client,
 		queueURL:  result.QueueUrl,
 		processor: processor,
 		fs:        fs,
+		messages:  make(chan *sqs.Message, config.BatchSize),
 	}
 	if srv.config.MetricPort > 0 {
 		srv.processor.StartMetricsEndpoint()
 	}
+	go srv.handleMessages()
 	location := reflect.TypeOf(srv).PkgPath()
-	srv.stats = srv.processor.Metrics.MultiOperationCounter(location, stat.SubscriberMetricName, "subscriber performance",time.Microsecond, time.Microsecond, 3 , stat.NewSubscriber())
+	srv.stats = srv.processor.Metrics.MultiOperationCounter(location, stat.SubscriberMetricName, "subscriber performance", time.Microsecond, time.Microsecond, 3, stat.NewSubscriber())
 	return srv, nil
 }
