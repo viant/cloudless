@@ -50,7 +50,7 @@ func (s *Service) consume() error {
 	}
 	msgs, err := s.sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            s.queueURL,
-		MaxNumberOfMessages: &maxNumberOfMessages,
+		MaxNumberOfMessages: &batchSize,
 		WaitTimeSeconds:     &waitTimeSeconds,
 		VisibilityTimeout:   &visibilityTimeout,
 	})
