@@ -97,17 +97,19 @@ func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, fs afs.Se
 	defer func() {
 		r := recover()
 		if r != nil {
-			fmt.Printf("recover from panic: %v for msg: %+v", r, msg)
+			fmt.Printf("recover from panic: %v for msg: %v", r, msg)
 		}
 		atomic.AddInt32(&s.pending, -1)
 	}()
-
+	if msg.Body == nil {
+		return
+	}
 	recentCounter, onDone, stats := stat.SubscriberBegin(s.stats)
 	defer stat.SubscriberEnd(s.stats, recentCounter, onDone, stats)
 
 	s3Event := &aws.S3Event{}
 	if err := json.Unmarshal([]byte(*msg.Body), s3Event); err != nil {
-		log.Printf("failed to unmarshal GSEvent: %s, due to %v\n", *msg.Body, err)
+		log.Printf("failed to unmarshal S3vent: %s, due to %v\n", *msg.Body, err)
 		stats.Append(err)
 		return
 	}
