@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 )
@@ -100,7 +101,7 @@ func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, fs afs.Se
 	defer func() {
 		r := recover()
 		if r != nil {
-			fmt.Printf("recover from panic: %v for msg: %v", r, msg)
+			fmt.Printf("recover from panic: %v, %v", r, string(debug.Stack()))
 		}
 		atomic.AddInt32(&s.pending, -1)
 	}()
