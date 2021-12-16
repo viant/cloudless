@@ -41,19 +41,22 @@ func (s *Service) Consume(ctx context.Context) error {
 }
 
 func (s *Service) consume() error {
-	maxNumberOfMessages := int64(s.config.BatchSize)
 	waitTimeSeconds := int64(s.config.WaitTimeSeconds)
 	visibilityTimeout := int64(s.config.VisibilityTimeout)
-	batchSize := maxNumberOfMessages - int64(atomic.LoadInt32(&s.pending))
+	batchSize := int64(s.config.BatchSize) - int64(atomic.LoadInt32(&s.pending))
 	if batchSize <= 0 {
 		return nil
 	}
 	if os.Getenv("DEBUG_MSG") == "1" {
 		fmt.Printf("requesting batch size: %v\n", batchSize)
 	}
+	maxNumberOfMessages := batchSize
+	if maxNumberOfMessages > 10 {
+		maxNumberOfMessages = 10
+	}
 	msgs, err := s.sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
 		QueueUrl:            s.queueURL,
-		MaxNumberOfMessages: &batchSize,
+		MaxNumberOfMessages: &maxNumberOfMessages,
 		WaitTimeSeconds:     &waitTimeSeconds,
 		VisibilityTimeout:   &visibilityTimeout,
 	})
