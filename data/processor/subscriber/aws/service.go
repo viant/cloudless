@@ -97,6 +97,10 @@ func (s *Service) deleteMessage(msg *sqs.Message) error {
 	return err
 }
 
+func (s *Service) Messages() chan *sqs.Message {
+	return s.messages
+}
+
 func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, fs afs.Service) {
 	defer func() {
 		r := recover()
