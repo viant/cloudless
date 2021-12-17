@@ -134,14 +134,20 @@ func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, fs afs.Se
 	request, err := s3Event.NewRequest(reqContext, s.fs, &s.config.Config)
 	if err != nil {
 		//source file has been removed
-		if exists, _ := fs.Exists(ctx, request.SourceURL); !exists {
-			if err = s.deleteMessage(msg); err != nil {
-				stats.Append(err)
-				stats.Append(stat.NegativeAcknowledged)
-			} else {
-				stats.Append(stat.Acknowledged)
+		sourceURL := ""
+		if len(s3Event.Records) > 0 {
+			sourceURL = fmt.Sprintf("s3://%s/%s", s3Event.Records[0].S3.Bucket.Name, s3Event.Records[0].S3.Object.Key)
+		}
+		if sourceURL != "" {
+			if exists, _ := fs.Exists(ctx, sourceURL); !exists {
+				if err = s.deleteMessage(msg); err != nil {
+					stats.Append(err)
+					stats.Append(stat.NegativeAcknowledged)
+				} else {
+					stats.Append(stat.Acknowledged)
+				}
+				return
 			}
-			return
 		}
 		stats.Append(err)
 		stats.Append(stat.NegativeAcknowledged)
