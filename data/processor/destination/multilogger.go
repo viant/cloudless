@@ -38,13 +38,20 @@ func (m *MultiLogger) Get(key string) (*log.Logger, error) {
 	URL = m.ReplaceKeyName(URL, key)
 
 	rotation := baseResponse.Destination.Rotation
+	var aRotation  *config.Rotation
 	if rotation != nil {
-		rotation.URL = m.ReplaceKeyName(rotation.URL,key)
+		aRotation = &config.Rotation{
+			EveryMs:    rotation.EveryMs,
+			MaxEntries: rotation.MaxEntries,
+			URL:        m.ReplaceKeyName(rotation.URL,key),
+			Codec:      rotation.Codec,
+			Emit:       rotation.Emit,
+		}
 	}
 	cfg := &config.Stream{
 		URL:          URL,
 		Codec:        baseResponse.Destination.Codec,
-		Rotation:     rotation,
+		Rotation:     aRotation,
 		StreamUpload: true,
 	}
 	var err error
