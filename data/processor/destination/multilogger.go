@@ -34,13 +34,24 @@ func (m *MultiLogger) Get(key string) (*log.Logger, error) {
 	}
 
 	baseResponse := m.reporter.BaseResponse()
-	URL := baseResponse.DestinationURL
-	if count := strings.Count(URL, m.keyName); count > 0 {
-		URL = strings.Replace(URL, m.keyName, key, count)
+	URL := baseResponse.Destination.URL
+	URL = m.ReplaceKeyName(URL, key)
+
+	rotation := baseResponse.Destination.Rotation
+	var aRotation  *config.Rotation
+	if rotation != nil {
+		aRotation = &config.Rotation{
+			EveryMs:    rotation.EveryMs,
+			MaxEntries: rotation.MaxEntries,
+			URL:        m.ReplaceKeyName(rotation.URL,key),
+			Codec:      rotation.Codec,
+			Emit:       rotation.Emit,
+		}
 	}
 	cfg := &config.Stream{
 		URL:          URL,
-		Codec:        baseResponse.DestinationCodec,
+		Codec:        baseResponse.Destination.Codec,
+		Rotation:     aRotation,
 		StreamUpload: true,
 	}
 	var err error
@@ -51,6 +62,15 @@ func (m *MultiLogger) Get(key string) (*log.Logger, error) {
 	m.loggers[key] = logger
 	return logger, nil
 }
+
+func (m *MultiLogger) ReplaceKeyName( URL string,key string) string {
+	if count := strings.Count(URL, m.keyName); count > 0 {
+		URL = strings.Replace(URL, m.keyName, key, count)
+	}
+	return URL
+}
+
+
 
 //Close closes all loggers
 func (m *MultiLogger) Close() (err error) {

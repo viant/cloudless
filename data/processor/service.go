@@ -120,8 +120,8 @@ func (s *Service) openWriters(retryURL, corruptionURL string) (*Writer, *Writer)
 }
 
 func (s *Service) makeURL(response *Response, request *Request) {
-	response.DestinationURL = s.Config.ExpandDestinationURL(request.StartTime)
-	response.DestinationCodec = s.Config.DestinationCodec
+	response.Destination = s.Config.ExpandDestination(request.StartTime)
+
 	if s.Config.CorruptionURL != "" {
 		response.CorruptionURL = expandURL(request.TransformSourceURL(s.Config.CorruptionURL), request.StartTime)
 	}

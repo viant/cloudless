@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"github.com/viant/afs"
+	"github.com/viant/tapper/config"
 	"math"
 	"os"
 	"strconv"
@@ -28,22 +29,58 @@ type (
 		Concurrency         int
 		DestinationURL      string // Service processing data destination URL. This is a template, e.g. $gs://$mybucket/$prefix/$a.dat
 		DestinationCodec    string
-		RetryURL         string // destination for the data to be retried
-		FailedURL        string // destination for the data that has failed max retires
-		CorruptionURL    string /// destination for the corrupted data
-		MaxExecTimeMs    int    // default execution timeMs used when context does not come with deadline
-		OnDone           string //move or delete, (move moves data to process URL,or delete for delete)
-		OnDoneURL        string
-		ReaderBufferSize int  //if set above zero uses afs Steam option
-		BatchSize        int  //number of data lines passed to processor (1 by default)
-		Sort             Sort //optional sorting config
-		ScannerBufferMB  int  //use in case you see bufio.Scanner: token too long
-		MetricPort       int  //if specified HTTP endpoint port to expose metrics
+		Destination         *config.Stream
+		RetryURL            string // destination for the data to be retried
+		FailedURL           string // destination for the data that has failed max retires
+		CorruptionURL       string /// destination for the corrupted data
+		MaxExecTimeMs       int    // default execution timeMs used when context does not come with deadline
+		OnDone              string //move or delete, (move moves data to process URL,or delete for delete)
+		OnDoneURL           string
+		ReaderBufferSize    int  //if set above zero uses afs Steam option
+		BatchSize           int  //number of data lines passed to processor (1 by default)
+		Sort                Sort //optional sorting config
+		ScannerBufferMB     int  //use in case you see bufio.Scanner: token too long
+		MetricPort          int  //if specified HTTP endpoint port to expose metrics
 	}
 )
 
 func (c Config) ExpandDestinationURL(startTime time.Time) string {
+	if c.Destination != nil && c.Destination.URL != "" {
+		return expandURL(c.Destination.URL, startTime)
+	}
 	return expandURL(c.DestinationURL, startTime)
+}
+
+func (c Config) ExpandDestinationRotationURL(startTime time.Time) string {
+	if c.Destination != nil && c.Destination.Rotation != nil && c.Destination.Rotation.URL != "" {
+		return expandURL(c.Destination.Rotation.URL, startTime)
+	}
+	return ""
+}
+
+
+func(c *Config) ExpandDestination(startTime time.Time) *config.Stream {
+	if c.Destination == nil && c.DestinationURL == "" {
+		return nil
+	}
+	destination := &config.Stream{}
+	destination.URL = c.ExpandDestinationURL(startTime) //
+	if c.DestinationCodec != "" {
+		destination.Codec = c.DestinationCodec
+	}
+	if c.Destination != nil && c.Destination.Rotation != nil {
+		rotation := &config.Rotation{}
+		rotation.URL = c.ExpandDestinationRotationURL(startTime)
+		rotation.Codec = c.Destination.Rotation.Codec
+		rotation.EveryMs = c.Destination.Rotation.EveryMs
+		rotation.MaxEntries = c.Destination.Rotation.MaxEntries
+		rotation.Emit = c.Destination.Rotation.Emit
+		destination.Rotation = rotation
+		if c.Destination.URL == "" && c.Destination.Rotation.URL != "" {
+			destination.URL = rotation.URL
+		}
+	}
+	return destination
 }
 
 // Deadline returns max execution time for a Processor

@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"github.com/viant/tapper/config"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -51,8 +52,7 @@ type Response struct {
 	StartTime        time.Time
 	RuntimeMs        int
 	SourceURL        string `json:",omitempty"`
-	DestinationURL   string `json:",omitempty"` // Service processing data destination URL. This is a template, e.g. $gs://$mybucket/$prefix/$a.dat
-	DestinationCodec string `json:"-"`          //optional compression codec (i.e gzip)
+	Destination 	 *config.Stream
 	RetryURL         string `json:"-"`          // destination for the data to be replayed
 	CorruptionURL    string `json:"-"`
 	Processed        int32  `json:",omitempty"`

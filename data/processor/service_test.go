@@ -8,6 +8,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/file"
 	"github.com/viant/assertly"
+	"github.com/viant/tapper/config"
 	"github.com/viant/toolbox"
 	"sort"
 	"strings"
@@ -47,7 +48,7 @@ func TestService_Process(t *testing.T) {
 8
 9
 0`), nil, "mem://localhost/output/data/numbers.txt"),
-			expectedResponse: `{"Status":"ok", "Processed":10,"DestinationURL":"/mem://localhost/dest/sum/" }`,
+			expectedResponse: `{"Status":"ok", "Processed":10,"Destination":{ "URL" : "/mem://localhost/dest/sum/" }}`,
 			expectedData:     "45",
 		},
 
@@ -59,6 +60,10 @@ func TestService_Process(t *testing.T) {
 				BatchSize:      1,
 				RetryURL:       "mem://localhost/tmp/retry/",
 				FailedURL:      "mem://localhost/tmp/failed/",
+				Destination: &config.Stream{
+					URL:          "mem://localhost/dest/sum-$UUID.txt",
+					StreamUpload: false,
+				},
 			},
 			Processor: &sumProcessor{fs: afs.New()},
 			ctx:       context.Background(),
@@ -72,7 +77,7 @@ func TestService_Process(t *testing.T) {
 8
 9
 0`), nil, "mem://localhost/output/data/numbers.txt"),
-			expectedResponse: `{"Status":"ok", "Processed":10,"DestinationURL":"/mem://localhost/dest/sum/" }`,
+			expectedResponse: `{"Status":"ok", "Processed":10,"Destination":{ "URL" : "/mem://localhost/dest/sum/" }}`,
 			expectedData:     "45",
 		},
 		{
@@ -100,7 +105,7 @@ func TestService_Process(t *testing.T) {
 8
 9
 0`), nil, "mem://localhost/output/data/numbers.txt"),
-			expectedResponse:  `{"Status":"ok|retry", "Processed":9,"DestinationURL":"mem://localhost/dest/sum.txt", "RetriableErrors":1 }`,
+			expectedResponse:  `{"Status":"ok|retry", "Processed":9,"Destination":{ "URL" : "/mem://localhost/dest/sum/"}, "RetriableErrors":1 }`,
 			expectedData:      "37",
 			expectedRetryData: "8",
 		},
@@ -139,7 +144,7 @@ func TestService_Process(t *testing.T) {
 3
 3
 1`), nil, "mem://localhost/output/data/numbers.txt"),
-			expectedResponse: `{"Status":"ok", "Processed":3,"DestinationURL":"mem://localhost/dest/sum.txt"}`,
+			expectedResponse: `{"Status":"ok", "Processed":3,"Destination":{ "URL" : "/mem://localhost/dest/sum/" }}`,
 			expectedData:     "21",
 		},
 
@@ -178,7 +183,7 @@ func TestService_Process(t *testing.T) {
 3
 3
 1`), nil, "mem://localhost/output/data/numbers.txt"),
-			expectedResponse: `{"Status":"ok", "Processed":4,"DestinationURL":"mem://localhost/dest/sum.txt"}`,
+			expectedResponse: `{"Status":"ok", "Processed":4,"Destination":{ "URL" : "/mem://localhost/dest/sum/" }}`,
 			expectedData:     "21",
 		},
 
@@ -208,7 +213,7 @@ func TestService_Process(t *testing.T) {
 8
 9
 0`), nil, "mem://localhost/output/data/sum-retry05.txt"),
-			expectedResponse:  `{"Status":"ok|retry", "Processed":9,"DestinationURL":"mem://localhost/dest/sum.txt" }`,
+			expectedResponse:  `{"Status":"ok|retry", "Processed":9,"Destination":{ "URL" : "/mem://localhost/dest/sum/" }}`,
 			expectedData:      "37",
 			expectedRetryData: "8",
 		},
@@ -239,7 +244,7 @@ func TestService_Process(t *testing.T) {
 8
 9
 0`), nil, "mem://localhost/output/data/sum-retry05.txt"),
-			expectedResponse:  `{"Status":"ok|retry", "Processed":9,"DestinationURL":"mem://localhost/dest/sum.txt" }`,
+			expectedResponse:  `{"Status":"ok|retry", "Processed":9,"Destination":{ "URL" : "/mem://localhost/dest/sum/" }}`,
 			expectedData:      "42",
 			expectedRetryData: "3",
 		},
@@ -267,7 +272,7 @@ func TestService_Process(t *testing.T) {
 2
 3
 `), nil, "mem://localhost/output/data/sum-retry05.txt"),
-			expectedResponse: `{"Status":"ok", "Processed":3,"DestinationURL":"mem://localhost/dest/sum.txt" }`,
+			expectedResponse: `{"Status":"ok", "Processed":3,"Destination":{ "URL" : "/mem://localhost/dest/sum/" }}`,
 			expectedData:     "700",
 		},
 		{
@@ -296,7 +301,7 @@ func TestService_Process(t *testing.T) {
 9
 0
 11`), nil, "mem://localhost/output/data/numbers.txt"),
-			expectedResponse:  `{"Status":"ok|retry", "Processed":0,"DestinationURL":"mem://localhost/dest/sum.txt", "RetriableErrors":5 }`,
+			expectedResponse:  `{"Status":"ok|retry", "Processed":0,"Destination":{ "URL" : "/mem://localhost/dest/sum/" }, "RetriableErrors":5 }`,
 			expectedData:      "0",
 			expectedRetryData: "0,1,11,2,3,4,5,6,7,8,9",
 		},
@@ -322,9 +327,9 @@ func TestService_Process(t *testing.T) {
 		if !assertly.AssertValues(t, useCase.expectedResponse, actual, useCase.description) {
 			toolbox.DumpIndent(actual, true)
 		}
-		if actual.DestinationURL != "" {
-			assert.True(t, !strings.Contains(actual.DestinationURL, "$"), useCase.description)
-			data, err := fs.DownloadWithURL(useCase.ctx, actual.DestinationURL)
+		if actual.Destination.URL != "" {
+			assert.True(t, !strings.Contains(actual.Destination.URL, "$"), useCase.description)
+			data, err := fs.DownloadWithURL(useCase.ctx, actual.Destination.URL)
 			assert.Nil(t, err, useCase.description)
 			assert.Equal(t, useCase.expectedData, string(data), useCase.description)
 
@@ -384,7 +389,7 @@ func (p *sumProcessor) sum(data string, sum *int32) error {
 }
 
 func (p *sumProcessor) Post(ctx context.Context, reporter Reporter) error {
-	destURL := reporter.BaseResponse().DestinationURL
+	destURL := reporter.BaseResponse().Destination.URL
 	if destURL != "" {
 		value := ctx.Value(sumKey("sum"))
 		sum := value.(*int32)
@@ -431,7 +436,7 @@ func (p *dataStoreSumProcessor) sum(key string, sum *int32) error {
 }
 
 func (p *dataStoreSumProcessor) Post(ctx context.Context, reporter Reporter) error {
-	destURL := reporter.BaseResponse().DestinationURL
+	destURL := reporter.BaseResponse().Destination.URL
 	if destURL != "" {
 		value := ctx.Value(sumKey("sum"))
 		sum := value.(*int32)

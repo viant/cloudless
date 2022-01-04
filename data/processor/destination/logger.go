@@ -19,8 +19,9 @@ const DataLoggerKey = dataLoggerKey("dataLogger")
 func NewDataLogger(ctx context.Context, reporter processor.Reporter) (context.Context, error) {
 	baseResponse := reporter.BaseResponse()
 	cfg := &config.Stream{
-		URL:          baseResponse.DestinationURL,
-		Codec:        baseResponse.DestinationCodec,
+		URL:          baseResponse.Destination.URL,
+		Codec:        baseResponse.Destination.Codec,
+		Rotation:     baseResponse.Destination.Rotation,
 		StreamUpload: true,
 	}
 	logger, err := log.New(cfg, "", afs.New())
