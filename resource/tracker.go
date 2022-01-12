@@ -11,7 +11,7 @@ import (
 )
 
 type Tracker struct {
-	baseURL        string
+	watchURL       string
 	assets         Assets
 	mutex          sync.Mutex
 	checkFrequency time.Duration
@@ -48,16 +48,16 @@ func (m *Tracker) hasChanges(assets []storage.Object) bool {
 
 //Notify returns true if resource under base URL have changed
 func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL string, operation Operation)) error {
-	if m.baseURL == "" {
+	if m.watchURL == "" {
 		return nil
 	}
 	if !m.isCheckDue(time.Now()) {
 		return nil
 	}
 
-	resources, err := fs.List(ctx, m.baseURL, option.NewRecursive(true))
+	resources, err := fs.List(ctx, m.watchURL, option.NewRecursive(true))
 	if err != nil {
-		return errors.Wrapf(err, "failed to load rules %v", m.baseURL)
+		return errors.Wrapf(err, "failed to load rules %v", m.watchURL)
 	}
 	if !m.hasChanges(resources) {
 		return nil
@@ -69,25 +69,25 @@ func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL 
 		m.assets = make(map[string]storage.Object)
 	}
 	m.assets.Added(assets, func(object storage.Object) {
-		callback(object.URL(), OperationAdded)
+		callback(object.URL(), Added)
 	})
 	m.assets.Modified(assets, func(object storage.Object) {
-		callback(object.URL(), OperationModified)
+		callback(object.URL(), Modified)
 	})
 	m.assets.Deleted(assets, func(object storage.Object) {
-		callback(object.URL(), OperationDeleted)
+		callback(object.URL(), Deleted)
 	})
 	return nil
 }
 
-func New(baseURL string, checkFrequency time.Duration) *Tracker {
+func New(watchURL string, checkFrequency time.Duration) *Tracker {
 	if checkFrequency == 0 {
 		checkFrequency = time.Minute
 	}
 	return &Tracker{
 		checkFrequency: checkFrequency,
 		mutex:          sync.Mutex{},
-		baseURL:        baseURL,
+		watchURL:       watchURL,
 		assets:         make(map[string]storage.Object),
 	}
 }

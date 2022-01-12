@@ -170,6 +170,7 @@ func (s *Service) handleMessage(ctx context.Context, msg *sqs.Message, fs afs.Se
 	if err != nil {
 		stats.Append(err)
 		fmt.Printf("failed marshal reported %v\n", reporter)
+
 	}
 	fmt.Printf("%s\n", output)
 }

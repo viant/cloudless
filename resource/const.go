@@ -3,8 +3,8 @@ package resource
 type Operation int
 
 const (
-	OperationUndefined = -1
-	OperationAdded     = Operation(iota)
-	OperationModified
-	OperationDeleted
+	Undefined = -1
+	Added     = Operation(iota)
+	Modified
+	Deleted
 )
