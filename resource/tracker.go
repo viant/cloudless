@@ -46,6 +46,21 @@ func (m *Tracker) hasChanges(assets []storage.Object) bool {
 
 }
 
+//Watch checks resources in the background thread and calls callback if any modification, or calls error handler if error
+func (m *Tracker) Watch(ctx context.Context, fs afs.Service, callback func(URL string, operation Operation), onError func(err error)) {
+	go m.watch(ctx, fs, callback, onError)
+}
+
+func (m *Tracker) watch(ctx context.Context, fs afs.Service, callback func(URL string, operation Operation), onError func(err error)) {
+	for {
+		err := m.Notify(ctx, fs, callback)
+		if err != nil {
+			onError(err)
+		}
+		time.Sleep(m.checkFrequency)
+	}
+}
+
 //Notify returns true if resource under base URL have changed
 func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL string, operation Operation)) error {
 	if m.watchURL == "" {
