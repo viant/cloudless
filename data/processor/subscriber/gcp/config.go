@@ -13,6 +13,7 @@ type Config struct {
 	ProjectID    string
 	Subscription string
 	BatchSize    int
+	UseSubscriptionConcurrency bool
 }
 
 //Initinitialises config

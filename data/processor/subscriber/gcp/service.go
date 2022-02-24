@@ -13,7 +13,9 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,7 +25,9 @@ type Service struct {
 	client    *pubsub.Client
 	processor *processor.Service
 	fs        afs.Service
-	stats *gmetric.Operation
+	stats     *gmetric.Operation
+	messages  chan *pubsub.Message
+	pending   int32
 }
 
 //Consume starts consumer
@@ -33,34 +37,70 @@ func (s *Service) Consume(ctx context.Context) error {
 		if err != nil {
 			log.Printf("failed to consume: %v\n", err)
 		}
+		time.Sleep(2 * time.Minute)
 	}
 }
 
 func (s *Service) consume(ctx context.Context) error {
-	var URL string
-	defer func() {
-		r := recover()
-		if r != nil {
-			fmt.Printf("recover from panic: URL:%v, error: %v", URL, r)
-		}
-	}()
 	var subscription *pubsub.Subscription
 	if s.config.ProjectID == "" {
 		subscription = s.client.Subscription(s.config.Subscription)
 	} else {
 		subscription = s.client.SubscriptionInProject(s.config.Subscription, s.config.ProjectID)
 	}
-	fs := afs.New()
-	subscription.ReceiveSettings.MaxOutstandingMessages = s.config.BatchSize
-	subscription.ReceiveSettings.NumGoroutines = s.config.BatchSize
+	batchSize := s.config.BatchSize - int(atomic.LoadInt32(&s.pending))
+	if batchSize <= 0 {
+		return nil
+	}
+	subscription.ReceiveSettings.MaxOutstandingMessages = batchSize
+	return s.processMessage(ctx, subscription, batchSize)
+}
+
+func (s *Service) processMessage(ctx context.Context, subscription *pubsub.Subscription, batchSize int) error {
+	if s.config.UseSubscriptionConcurrency {
+		subscription.ReceiveSettings.NumGoroutines = batchSize
+		return subscription.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+			if msg == nil {
+				return
+			}
+			if os.Getenv("DEBUG_MSG") == "1" {
+				fmt.Printf("added message %v\n", string(msg.Data))
+			}
+			atomic.AddInt32(&s.pending, 1)
+			s.handleMessage(ctx, msg, s.fs)
+		})
+	}
 	return subscription.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
-		s.handleMessage(ctx, msg, URL, fs)
+		if os.Getenv("DEBUG_MSG") == "1" {
+			fmt.Printf("added message %v\n", string(msg.Data))
+		}
+		atomic.AddInt32(&s.pending, 1)
+		s.messages <- msg
 	})
 }
 
-func (s *Service) handleMessage(ctx context.Context, msg *pubsub.Message, URL string, fs afs.Service) {
+func (s *Service) handleMessages() {
+	for {
+		msg := <-s.messages
+		if msg == nil {
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		go s.handleMessage(context.Background(), msg, s.fs)
+	}
+}
+
+func (s *Service) handleMessage(ctx context.Context, msg *pubsub.Message, fs afs.Service) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			fmt.Printf("recover from panic: %v, %v", r, string(debug.Stack()))
+		}
+		atomic.AddInt32(&s.pending, -1)
+	}()
 	recentCounter, onDone, stats := stat.SubscriberBegin(s.stats)
-	defer stat.SubscriberEnd(s.stats, recentCounter,onDone, stats)
+	defer stat.SubscriberEnd(s.stats, recentCounter, onDone, stats)
+
 	gsEvent := &gcp.GSEvent{}
 	if err := json.Unmarshal(msg.Data, gsEvent); err != nil {
 		log.Printf("failed to unmarshal GSEvent: %s, due to %v\n", msg.Data, err)
@@ -69,10 +109,7 @@ func (s *Service) handleMessage(ctx context.Context, msg *pubsub.Message, URL st
 		stats.Append(err)
 		return
 	}
-	URL = gsEvent.URL()
-	if os.Getenv("DEBUG_MSG") != "" {
-		fmt.Printf("%s\n", msg.Data)
-	}
+	URL := gsEvent.URL()
 	reqContext := context.Background()
 	request, err := gsEvent.NewRequest(reqContext, s.fs, &s.config.Config)
 	stats.Append(err)
@@ -116,20 +153,30 @@ func (s *Service) handleMessage(ctx context.Context, msg *pubsub.Message, URL st
 	fmt.Printf("%s\n", output)
 }
 
-
 //New creates a new subscriber
-func New(config *Config, client *pubsub.Client, processor *processor.Service, fs afs.Service) *Service {
-	srv :=  &Service{
+func New(config *Config, client *pubsub.Client, processor *processor.Service, fs afs.Service) (*Service, error) {
+	err := config.Init(context.Background(), fs)
+	if err != nil {
+		return nil, err
+	}
+	err = config.Validate()
+	if err != nil {
+		return nil, err
+	}
+	srv := &Service{
 		config:    config,
 		client:    client,
 		processor: processor,
 		fs:        fs,
+		messages:  make(chan *pubsub.Message, config.BatchSize),
 	}
-
+	if !config.UseSubscriptionConcurrency {
+		go srv.handleMessages()
+	}
 	location := reflect.TypeOf(srv).PkgPath()
-	srv.stats = srv.processor.Metrics.MultiOperationCounter(location, stat.SubscriberMetricName, "subscriber performance",time.Microsecond, time.Microsecond, 3 , stat.NewSubscriber())
+	srv.stats = srv.processor.Metrics.MultiOperationCounter(location, stat.SubscriberMetricName, "subscriber performance", time.Microsecond, time.Microsecond, 3, stat.NewSubscriber())
 	if srv.config.MetricPort > 0 {
 		srv.processor.StartMetricsEndpoint()
 	}
-	return srv
+	return srv, nil
 }
