@@ -37,7 +37,7 @@ func (s *Service) Consume(ctx context.Context) error {
 		if err != nil {
 			log.Printf("failed to consume: %v\n", err)
 		}
-		time.Sleep(2 * time.Minute)
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -53,41 +53,18 @@ func (s *Service) consume(ctx context.Context) error {
 		return nil
 	}
 	subscription.ReceiveSettings.MaxOutstandingMessages = batchSize
-	return s.processMessage(ctx, subscription, batchSize)
-}
-
-func (s *Service) processMessage(ctx context.Context, subscription *pubsub.Subscription, batchSize int) error {
-	if s.config.UseSubscriptionConcurrency {
-		subscription.ReceiveSettings.NumGoroutines = batchSize
-		return subscription.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
-			if msg == nil {
-				return
-			}
-			if os.Getenv("DEBUG_MSG") == "1" {
-				fmt.Printf("added message %v\n", string(msg.Data))
-			}
-			atomic.AddInt32(&s.pending, 1)
-			s.handleMessage(ctx, msg, s.fs)
-		})
-	}
+	subscription.ReceiveSettings.NumGoroutines = s.config.Concurrency
+	subscription.ReceiveSettings.MaxExtension = s.config.MaxExtension
 	return subscription.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+		if msg == nil {
+			return
+		}
 		if os.Getenv("DEBUG_MSG") == "1" {
 			fmt.Printf("added message %v\n", string(msg.Data))
 		}
 		atomic.AddInt32(&s.pending, 1)
-		s.messages <- msg
+		s.handleMessage(ctx, msg, s.fs)
 	})
-}
-
-func (s *Service) handleMessages() {
-	for {
-		msg := <-s.messages
-		if msg == nil {
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-		go s.handleMessage(context.Background(), msg, s.fs)
-	}
 }
 
 func (s *Service) handleMessage(ctx context.Context, msg *pubsub.Message, fs afs.Service) {
@@ -168,10 +145,6 @@ func New(config *Config, client *pubsub.Client, processor *processor.Service, fs
 		client:    client,
 		processor: processor,
 		fs:        fs,
-		messages:  make(chan *pubsub.Message, config.BatchSize),
-	}
-	if !config.UseSubscriptionConcurrency {
-		go srv.handleMessages()
 	}
 	location := reflect.TypeOf(srv).PkgPath()
 	srv.stats = srv.processor.Metrics.MultiOperationCounter(location, stat.SubscriberMetricName, "subscriber performance", time.Microsecond, time.Microsecond, 3, stat.NewSubscriber())
