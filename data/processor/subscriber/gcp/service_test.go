@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"testing"
-	"time"
 )
 
 func TestService_Consume(t *testing.T) {
@@ -21,7 +20,7 @@ func TestService_Consume(t *testing.T) {
 		Subscription: "cloudless-sub",
 		BatchSize: 5,
 		Concurrency: 2,
-		MaxExtension: 2 * time.Minute,
+		VisibilityTimeout: 2 * 3600,
 	}
 	os.Setenv("DEBUG_MSG","1")
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS","secret.json")
