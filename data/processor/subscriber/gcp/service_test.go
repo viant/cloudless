@@ -16,11 +16,11 @@ func TestService_Consume(t *testing.T) {
 		Config:       processor.Config{
 			OnDone: "delete",
 		},
-		ProjectID:    "viant-e2e",
-		Subscription: "cloudless-sub",
-		BatchSize: 5,
-		Concurrency: 2,
-		VisibilityTimeout: 2 * 3600,
+		ProjectID:          "viant-e2e",
+		Subscription:       "cloudless-sub",
+		BatchSize:          5,
+		MessageConcurrency: 2,
+		VisibilityTimeout:  2 * 3600,
 	}
 	os.Setenv("DEBUG_MSG","1")
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS","secret.json")

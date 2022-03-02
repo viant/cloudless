@@ -53,7 +53,7 @@ func (s *Service) consume(ctx context.Context) error {
 		return nil
 	}
 	subscription.ReceiveSettings.MaxOutstandingMessages = batchSize
-	subscription.ReceiveSettings.NumGoroutines = s.config.Concurrency
+	subscription.ReceiveSettings.NumGoroutines = s.config.MessageConcurrency
 	subscription.ReceiveSettings.MaxExtension = time.Duration(s.config.VisibilityTimeout) * time.Second
 	return subscription.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 		if msg == nil {

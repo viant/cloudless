@@ -10,11 +10,11 @@ import (
 //Config represent Pub/Sub subscriber config
 type Config struct {
 	processor.Config
-	ProjectID         string
-	Subscription      string
-	BatchSize         int // message batch to be processed
-	Concurrency       int // concurrency
-	VisibilityTimeout int // ack deadline time in sec
+	ProjectID          string
+	Subscription       string
+	BatchSize          int // message batch to be processed
+	MessageConcurrency int // concurrency
+	VisibilityTimeout  int // ack deadline time in sec
 }
 
 //Init initialises config
@@ -23,8 +23,8 @@ func (c *Config) Init(ctx context.Context, fs afs.Service) error {
 	if c.BatchSize == 0 {
 		c.BatchSize = 100
 	}
-	if c.Concurrency == 0 {
-		c.Concurrency = 20
+	if c.MessageConcurrency == 0 {
+		c.MessageConcurrency = 20
 	}
 	if c.VisibilityTimeout == 0 {
 		tmp := 43200 // 12 hours allowed max
