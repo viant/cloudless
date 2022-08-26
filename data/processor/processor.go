@@ -6,7 +6,7 @@ import (
 
 //Processor represents data processor
 type Processor interface {
-	Process(ctx context.Context, data []byte, reporter Reporter) error
+	Process(ctx context.Context, data interface{}, reporter Reporter) error
 }
 
 // PreProcessor is an optional preprocessor interface

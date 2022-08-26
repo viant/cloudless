@@ -36,11 +36,12 @@ type (
 		MaxExecTimeMs       int    // default execution timeMs used when context does not come with deadline
 		OnDone              string //move or delete, (move moves data to process URL,or delete for delete)
 		OnDoneURL           string
-		ReaderBufferSize    int  //if set above zero uses afs Steam option
-		BatchSize           int  //number of data lines passed to processor (1 by default)
-		Sort                Sort //optional sorting config
-		ScannerBufferMB     int  //use in case you see bufio.Scanner: token too long
-		MetricPort          int  //if specified HTTP endpoint port to expose metrics
+		ReaderBufferSize    int    //if set above zero uses afs Steam option
+		BatchSize           int    //number of data lines passed to processor (1 by default)
+		Sort                Sort   //optional sorting config
+		ScannerBufferMB     int    //use in case you see bufio.Scanner: token too long
+		MetricPort          int    //if specified HTTP endpoint port to expose metrics
+		RowTypeName         string // parquet/json row type
 	}
 )
 
@@ -58,8 +59,7 @@ func (c Config) ExpandDestinationRotationURL(startTime time.Time) string {
 	return ""
 }
 
-
-func(c *Config) ExpandDestination(startTime time.Time) *config.Stream {
+func (c *Config) ExpandDestination(startTime time.Time) *config.Stream {
 	if c.Destination == nil && c.DestinationURL == "" {
 		return nil
 	}

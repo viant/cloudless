@@ -20,16 +20,17 @@ const sumKey = sumKeyType("sum")
 //SumProcessor represents sum processor
 type SumProcessor struct{}
 
-//Process sums coma separated numbers
-func (p SumProcessor) Process(ctx context.Context, data []byte, reporter processor.Reporter) error {
-	if len(data) == 0 {
+//Process sums comma separated numbers
+func (p SumProcessor) Process(ctx context.Context, data interface{}, reporter processor.Reporter) error {
+	tmpData := data.([]byte)
+	if len(tmpData) == 0 {
 		return nil
 	}
 	value := ctx.Value(sumKey)
 	sum := value.(*int64)
-	aNumber, err := toolbox.ToInt(string(data))
+	aNumber, err := toolbox.ToInt(string(tmpData))
 	if err != nil {
-		return processor.NewDataCorruption(fmt.Sprintf("invalid number: %s, %v", data, err))
+		return processor.NewDataCorruption(fmt.Sprintf("invalid number: %s, %v", tmpData, err))
 	}
 	atomic.AddInt64(sum, int64(aNumber))
 	return nil
@@ -89,9 +90,9 @@ type HTTPProcessor struct {
 	BaseURL string
 }
 
-func (p HTTPProcessor) Process(ctx context.Context, data []byte, reporter processor.Reporter) error {
+func (p HTTPProcessor) Process(ctx context.Context, data interface{}, reporter processor.Reporter) error {
 	urlReporter := reporter.(*URLReporter)
-	URL := p.BaseURL + string(data)
+	URL := p.BaseURL + string(data.([]byte))
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, URL, nil)
 	if err != nil {
 		return processor.NewDataCorruption(fmt.Sprintf("invalid request: %v", URL))

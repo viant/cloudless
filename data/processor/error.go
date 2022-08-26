@@ -25,7 +25,7 @@ func isDataCorruptionError(err error) bool {
 
 //PartialRetry partial retry error allows to write only partial data back to retry stream
 type PartialRetry struct {
-	data    []byte
+	data    interface{}
 	message string
 }
 
@@ -35,7 +35,7 @@ func (e *PartialRetry) Error() string {
 }
 
 // NewDataCorruption returns data corruption error
-func NewPartialRetry(msg string, data []byte) error {
+func NewPartialRetry(msg string, data interface{}) error {
 	return &PartialRetry{message: msg, data: data}
 }
 

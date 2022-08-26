@@ -6,13 +6,24 @@ import (
 	"github.com/viant/toolbox"
 	"io"
 	"io/ioutil"
+	"reflect"
 	"strings"
 	"time"
+)
+
+const (
+	//Source types
+	Parquet = "parquet"
+	JSON    = "json"
+	CSV     = "csv"
 )
 
 // Request represents a processing request
 type Request struct {
 	io.ReadCloser
+	SourceType string
+	io.ReaderAt
+	RowType   reflect.Type
 	Attrs     map[string]interface{}
 	StartTime time.Time
 	SourceURL string //incoming original filename url
@@ -47,5 +58,6 @@ func NewRequest(reader io.Reader, attrs map[string]interface{}, sourceURL string
 		Attrs:      attrs,
 		StartTime:  time.Now(),
 		SourceURL:  sourceURL,
+		SourceType: CSV,
 	}
 }

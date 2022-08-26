@@ -363,10 +363,11 @@ func (p *sumProcessor) Pre(ctx context.Context, reporter Reporter) (context.Cont
 	return context.WithValue(ctx, sumKey("sum"), &sum), nil
 }
 
-func (p *sumProcessor) Process(ctx context.Context, data []byte, reporter Reporter) error {
+func (p *sumProcessor) Process(ctx context.Context, data interface{}, reporter Reporter) error {
 	value := ctx.Value(sumKey("sum"))
 	sum := value.(*int32)
-	text := string(data)
+	//tmpData := data.([]byte)
+	text := string(data.([]byte))
 	items := strings.Split(text, "\n")
 	for _, item := range items {
 		if err := p.sum(item, sum); err != nil {
@@ -422,10 +423,10 @@ func (p *dataStoreSumProcessor) Pre(ctx context.Context, reporter Reporter) (con
 	return context.WithValue(ctx, sumKey("sum"), &sum), nil
 }
 
-func (p *dataStoreSumProcessor) Process(ctx context.Context, data []byte, reporter Reporter) error {
+func (p *dataStoreSumProcessor) Process(ctx context.Context, data interface{}, reporter Reporter) error {
 	value := ctx.Value(sumKey("sum"))
 	sum := value.(*int32)
-	return p.sum(string(data), sum)
+	return p.sum(string(data.([]byte)), sum)
 }
 
 func (p *dataStoreSumProcessor) sum(key string, sum *int32) error {

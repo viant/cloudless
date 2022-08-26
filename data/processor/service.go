@@ -5,12 +5,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/francoispqt/gojay"
+	"github.com/vc42/parquet-go"
 	"github.com/viant/afs"
 	"github.com/viant/afs/url"
 	"github.com/viant/gmetric"
 	"github.com/viant/toolbox"
 	"io"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,7 +48,12 @@ func (s *Service) Do(ctx context.Context, request *Request) Reporter {
 	}
 	response.SourceURL = request.SourceURL
 	response.StartTime = request.StartTime
-	err := s.do(ctx, request, reporter)
+	var err error
+	if request.SourceType == Parquet {
+		err = s.do(ctx, request, reporter, s.loadParquetData)
+	} else { // CSV and JSON
+		err = s.do(ctx, request, reporter, s.loadData)
+	}
 	if err != nil {
 		response.LogError(err)
 	}
@@ -56,7 +64,8 @@ func (s *Service) Do(ctx context.Context, request *Request) Reporter {
 	return reporter
 }
 
-func (s *Service) do(ctx context.Context, request *Request, reporter Reporter) (err error) {
+func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
+	load func(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer)) (err error) {
 	response := reporter.BaseResponse()
 	s.makeURL(response, request)
 	defer func() {
@@ -73,9 +82,9 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter) (
 	}
 	waitGroup := &sync.WaitGroup{}
 	waitGroup.Add(s.Config.Concurrency + 1)
-	stream := make(chan []byte)
+	stream := make(chan interface{})
 	defer s.closeWriters(response, retryWriter, corruptionWriter)
-	go s.loadSourceData(ctx, waitGroup, request.ReadCloser, stream, response, retryWriter)
+	go load(ctx, waitGroup, request, stream, response, retryWriter)
 	var timeout = make(chan bool)
 
 	go s.setTimeoutChannel(ctx, timeout)
@@ -90,6 +99,199 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter) (
 		}
 	}
 	return nil
+}
+
+func (s *Service) loadParquetData(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer) {
+	defer waitGroup.Done()
+	defer close(stream)
+	deadline := s.Config.LoaderDeadline(ctx)
+	parReader := parquet.NewReader(request.ReaderAt)
+	defer parReader.Close()
+
+	for {
+		rowPtr := reflect.New(request.RowType).Interface()
+		err := parReader.Read(rowPtr)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			response.LogError(err)
+			continue
+		}
+		if time.Now().After(deadline) {
+			data, err := gojay.Marshal(rowPtr)
+			if err != nil {
+				response.LogError(err)
+			} else {
+				s.writeToRetry(retryWriter, data, response)
+			}
+			response.LoadTimeouts++
+			continue
+		}
+		response.Loaded++
+		stream <- rowPtr
+	}
+}
+
+func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer) {
+	defer waitGroup.Done()
+	defer close(stream)
+	var reader io.Reader = request.ReadCloser
+	if len(s.Config.Sort.By) > 0 {
+		var err error
+		if reader, err = s.sortInput(reader, response); err != nil {
+			response.LogError(err)
+		}
+	}
+	deadline := s.Config.LoaderDeadline(ctx)
+	scanner := bufio.NewScanner(reader)
+	s.Config.AdjustScannerBuffer(scanner)
+
+	defer func() {
+		if scanner.Err() != io.EOF {
+			response.LogError(scanner.Err())
+		}
+	}()
+
+	if request.SourceType == CSV && s.Config.Sort.Batch && len(s.Config.Sort.By) > 0 {
+		s.loadInGroups(ctx, scanner, deadline, retryWriter, response, stream)
+		return
+	}
+	if request.SourceType == CSV && s.Config.BatchSize > 0 {
+		s.loadInBatches(ctx, s.Config.BatchSize, scanner, deadline, retryWriter, response, stream)
+		return
+	}
+
+	for scanner.Scan() {
+		bs := scanner.Bytes()
+		data := make([]byte, len(bs))
+		copy(data, bs)
+		if time.Now().After(deadline) {
+			s.writeToRetry(retryWriter, data, response)
+			response.LoadTimeouts++
+			continue
+		}
+		if request.SourceType == JSON {
+			rowPtr := reflect.New(request.RowType).Interface()
+			if err := gojay.Unmarshal(data, rowPtr); err != nil {
+				response.LogError(err)
+				continue
+			}
+			stream <- rowPtr
+		} else {
+			stream <- data
+		}
+		response.Loaded++
+	}
+}
+
+func (s *Service) runWorker(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer, timeout chan bool) {
+	response := reporter.BaseResponse()
+	defer wg.Done()
+	deadline := s.Config.Deadline(ctx)
+	for data := range stream {
+		if time.Now().After(deadline) {
+			s.retryWriter2(ctx, data, retryWriter, response)
+			continue
+		}
+		var done = make(chan bool)
+		go func() {
+			err := s.Process(ctx, data, reporter)
+			if err != nil {
+				switch actual := err.(type) {
+				case *DataCorruption:
+					response.LogError(err)
+					s.corruptionWriter(data, corruptionWriter, response)
+				case *PartialRetry:
+					s.partialRetryWriter(actual, data, response, retryWriter)
+					response.LogError(newProcessError(fmt.Sprintf("failed to process data due to %+v,  %+v", actual, data)))
+				default:
+					response.LogError(newProcessError(fmt.Sprintf(" failed to process data due to %v, %+v", err, data)))
+					s.retryWriter(data, retryWriter, response)
+				}
+			} else {
+				atomic.AddInt32(&response.Processed, 1)
+			}
+			done <- true
+			close(done)
+		}()
+
+		select {
+		case <-done:
+		case <-timeout:
+			response.LogError(newProcessError(fmt.Sprintf("deadline exceeded while processing %+v", data)))
+			s.retryWriter(data, retryWriter, response)
+		}
+
+	}
+}
+
+func (s *Service) retryWriter2(ctx context.Context, data interface{}, retryWriter *Writer, response *Response) {
+	v, ok := data.([]byte)
+	if ok {
+		if err := retryWriter.Write(ctx, v); err != nil {
+			response.LogError(newRetryError(fmt.Sprintf(" failed to write data %v due to %v", data, err)))
+		}
+	} else {
+		vj, err := gojay.Marshal(data)
+		if err != nil {
+			response.LogError(fmt.Errorf(" failed to marshal data %+v due to %v", data, err))
+		} else {
+			if err = retryWriter.Write(ctx, vj); err != nil {
+				response.LogError(newRetryError(fmt.Sprintf(" failed to write data %v due to %v", vj, err)))
+			}
+		}
+	}
+}
+
+func (s *Service) retryWriter(data interface{}, retryWriter *Writer, response *Response) {
+	v, ok := data.([]byte)
+	if ok {
+		s.writeToRetry(retryWriter, v, response)
+	} else {
+		vj, err := gojay.Marshal(data)
+		if err != nil {
+			response.LogError(fmt.Errorf(" failed to marshal data %+v due to %v", data, err))
+		} else {
+			s.writeToRetry(retryWriter, vj, response)
+		}
+	}
+}
+
+func (s *Service) partialRetryWriter(actual *PartialRetry, data interface{}, response *Response, retryWriter *Writer) {
+	v, ok := data.([]byte)
+	if ok {
+		if actual.data != nil {
+			v = actual.data.([]byte)
+			atomic.AddInt32(&response.Processed, 1)
+		}
+		s.writeToRetry(retryWriter, v, response)
+	} else {
+		if actual.data != nil {
+			data = actual.data
+		}
+		vj, err := gojay.Marshal(data)
+		if err != nil {
+			response.LogError(fmt.Errorf(" failed to marshal data %+v due to %v", data, err))
+		} else {
+			atomic.AddInt32(&response.Processed, 1)
+			s.writeToRetry(retryWriter, vj, response)
+		}
+	}
+}
+
+func (s *Service) corruptionWriter(data interface{}, corruptionWriter *Writer, response *Response) {
+	v, ok := data.([]byte)
+	if ok {
+		s.writeCorrupted(corruptionWriter, v, response)
+	} else {
+		vj, err := gojay.Marshal(data)
+		if err != nil {
+			response.LogError(fmt.Errorf(" failed to marshal data %+v due to %v", data, err))
+		} else {
+			s.writeCorrupted(corruptionWriter, vj, response)
+		}
+	}
 }
 
 func (s *Service) setTimeoutChannel(ctx context.Context, timeout chan bool) {
@@ -135,6 +337,10 @@ func (s *Service) makeURL(response *Response, request *Request) {
 	retryURL = request.TransformSourceURL(retryURL)
 	retryURL = expandRetryURL(retryURL, request.StartTime, request.Retry())
 	response.RetryURL = retryURL
+	if request.SourceType == Parquet {
+		response.CorruptionURL = strings.Replace(response.CorruptionURL, ".parquet", ".json.gz", 1)
+		response.RetryURL = strings.Replace(response.RetryURL, ".parquet", ".json.gz", 1)
+	}
 }
 
 func (s *Service) StartMetricsEndpoint() {
@@ -152,7 +358,6 @@ func (s *Service) StartMetricsEndpoint() {
 	go server.ListenAndServe()
 }
 
-
 func (s *Service) closeWriters(response *Response, retryWriter *Writer, corruptionWriter *Writer) {
 	if retryWriter != nil {
 		response.LogError(retryWriter.Close())
@@ -162,49 +367,7 @@ func (s *Service) closeWriters(response *Response, retryWriter *Writer, corrupti
 	}
 }
 
-func (s *Service) loadSourceData(ctx context.Context, waitGroup *sync.WaitGroup, reader io.Reader, stream chan []byte, response *Response, retryWriter *Writer) {
-	defer waitGroup.Done()
-	defer close(stream)
-	if len(s.Config.Sort.By) > 0 {
-		var err error
-		if reader, err = s.sortInput(reader, response); err != nil {
-			response.LogError(err)
-		}
-	}
-	deadline := s.Config.LoaderDeadline(ctx)
-	scanner := bufio.NewScanner(reader)
-	s.Config.AdjustScannerBuffer(scanner)
-
-	defer func() {
-		if scanner.Err() != io.EOF {
-			response.LogError(scanner.Err())
-		}
-	}()
-
-	if s.Config.Sort.Batch && len(s.Config.Sort.By) > 0 {
-		s.loadInGroups(ctx, scanner, deadline, retryWriter, response, stream)
-		return
-	}
-	if s.Config.BatchSize > 0 {
-		s.loadInBatches(ctx, s.Config.BatchSize, scanner, deadline, retryWriter, response, stream)
-		return
-	}
-
-	for scanner.Scan() {
-		bs := scanner.Bytes()
-		data := make([]byte, len(bs))
-		copy(data, bs)
-		if time.Now().After(deadline) {
-			s.writeToRetry(retryWriter, data, response)
-			response.LoadTimeouts++
-			continue
-		}
-		response.Loaded++
-		stream <- data
-	}
-}
-
-func (s *Service) loadInBatches(ctx context.Context, batchSize int, scanner *bufio.Scanner, deadline time.Time, retryWriter *Writer, response *Response, stream chan []byte) {
+func (s *Service) loadInBatches(ctx context.Context, batchSize int, scanner *bufio.Scanner, deadline time.Time, retryWriter *Writer, response *Response, stream chan interface{}) {
 	batch := make([][]byte, 0)
 	for scanner.Scan() {
 		bs := scanner.Bytes()
@@ -231,7 +394,7 @@ func (s *Service) loadInBatches(ctx context.Context, batchSize int, scanner *buf
 	}
 }
 
-func (s *Service) loadInGroups(ctx context.Context, scanner *bufio.Scanner, deadline time.Time, retryWriter *Writer, response *Response, stream chan []byte) {
+func (s *Service) loadInGroups(ctx context.Context, scanner *bufio.Scanner, deadline time.Time, retryWriter *Writer, response *Response, stream chan interface{}) {
 	batch := make([][]byte, 0)
 	groupValue := ""
 	spec := &s.Config.Sort.Spec
@@ -272,53 +435,6 @@ func (s *Service) loadInGroups(ctx context.Context, scanner *bufio.Scanner, dead
 	if len(batch) > 0 {
 		stream <- bytes.Join(batch, []byte("\n"))
 		response.Batched++
-	}
-}
-
-func (s *Service) runWorker(ctx context.Context, wg *sync.WaitGroup, stream chan []byte, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer, timeout chan bool) {
-	response := reporter.BaseResponse()
-	defer wg.Done()
-	deadline := s.Config.Deadline(ctx)
-	for data := range stream {
-		if time.Now().After(deadline) {
-			if err := retryWriter.Write(ctx, data); err != nil {
-				response.LogError(newRetryError(fmt.Sprintf(" failed to write data %s due to %v", data, err)))
-			}
-			continue
-		}
-		var done = make(chan bool)
-		go func() {
-			err := s.Process(ctx, data, reporter)
-			if err != nil {
-				switch actual := err.(type) {
-				case *DataCorruption:
-					response.LogError(err)
-					s.writeCorrupted(corruptionWriter, data, response)
-				case *PartialRetry:
-					if len(actual.data) > 0 {
-						data = actual.data
-						atomic.AddInt32(&response.Processed, 1)
-					}
-					response.LogError(newProcessError(fmt.Sprintf("failed to process data due to %v,  %s", err, data)))
-					s.writeToRetry(retryWriter, data, response)
-				default:
-					response.LogError(newProcessError(fmt.Sprintf(" failed to process data due to %v, %s", err, data)))
-					s.writeToRetry(retryWriter, data, response)
-				}
-			} else {
-				atomic.AddInt32(&response.Processed, 1)
-			}
-			done <- true
-			close(done)
-		}()
-
-		select {
-		case <-done:
-		case <-timeout:
-			response.LogError(newProcessError(fmt.Sprintf("deadline exceeded while processing %s", data)))
-			s.writeToRetry(retryWriter, data, response)
-		}
-
 	}
 }
 
@@ -373,8 +489,6 @@ func New(config *Config, fs afs.Service, processor Processor, reporterProvider f
 		reporterProvider: reporterProvider,
 	}
 }
-
-
 
 // NewWithMetrics creates data processing service
 func NewWithMetrics(config *Config, fs afs.Service, processor Processor, reporterProvider func() Reporter, metrics *gmetric.Service) *Service {

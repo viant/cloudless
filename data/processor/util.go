@@ -3,7 +3,6 @@ package processor
 import (
 	"fmt"
 	"github.com/google/uuid"
-	"path"
 	"strings"
 	"time"
 )
@@ -20,7 +19,10 @@ func expandURL(URL string, time time.Time) string {
 
 func expandRetryURL(URL string, time time.Time, retry int) string {
 	URL = expandURL(URL, time)
-	ext := path.Ext(URL)
+	ext := ""
+	if extIndex := strings.Index(URL, "."); extIndex > -1 {
+		ext = URL[extIndex:]
+	}
 	if index := strings.LastIndex(URL, RetryFragment); index > -1 {
 		URL = URL[:index]
 	} else {
@@ -28,5 +30,4 @@ func expandRetryURL(URL string, time time.Time, retry int) string {
 	}
 
 	return URL + RetryFragment + fmt.Sprintf("%02d", retry+1) + ext
-
 }
