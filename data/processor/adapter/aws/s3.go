@@ -50,13 +50,15 @@ func (e S3Event) NewRequest(ctx context.Context, fs afs.Service, cfg *processor.
 		}
 		request.ReadCloser = reader
 	} else { // Parquet
+		if request.RowType = row_type.RowType(cfg.RowTypeName); request.RowType == nil {
+			return nil, fmt.Errorf(" parquet type name '%s' not regidtered", cfg.RowTypeName)
+		}
 		buffer, err := fs.DownloadWithURL(ctx, URL)
 		if err != nil {
 			return nil, err
 		}
 		request.ReaderAt = bytes.NewReader(buffer)
 	}
-	request.RowType = row_type.RowType(cfg.RowTypeName)
 	request.SourceURL = URL
 	request.StartTime = time.Now()
 
