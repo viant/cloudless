@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/consul/api v1.8.1
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
-	github.com/vc42/parquet-go v0.0.0-20220827161617-258c54ac2b0d
+	github.com/vc42/parquet-go v0.0.0-20220830121901-140cbf139cee
 	github.com/viant/afs v1.16.0
 	github.com/viant/afsc v1.3.0
 	github.com/viant/assertly v0.9.0
