@@ -49,6 +49,9 @@ func (e S3Event) NewRequest(ctx context.Context, fs afs.Service, cfg *processor.
 			return nil, err
 		}
 		request.ReadCloser = reader
+		if request.SourceType == processor.JSON {
+			request.RowType = row_type.RowType(cfg.RowTypeName)
+		}
 	} else { // Parquet
 		if request.RowType = row_type.RowType(cfg.RowTypeName); request.RowType == nil {
 			return nil, fmt.Errorf(" parquet type name '%s' not registered", cfg.RowTypeName)
