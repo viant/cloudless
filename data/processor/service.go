@@ -171,7 +171,7 @@ func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, reque
 			response.LoadTimeouts++
 			continue
 		}
-		if request.SourceType == JSON {
+		if request.SourceType == JSON && request.RowType != nil {
 			rowPtr := reflect.New(request.RowType).Interface()
 			if err := gojay.Unmarshal(data, rowPtr); err != nil {
 				response.LogError(err)
