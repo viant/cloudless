@@ -111,12 +111,11 @@ func (s *Service) loadParquetData(ctx context.Context, waitGroup *sync.WaitGroup
 	for {
 		rowPtr := reflect.New(request.RowType).Interface()
 		err := parReader.Read(rowPtr)
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
-			response.LogError(err)
-			continue
+			if err != io.EOF {
+				response.LogError(err)
+			}
+			break
 		}
 		if time.Now().After(deadline) {
 			data, err := gojay.Marshal(rowPtr)
