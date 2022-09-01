@@ -1,49 +1,52 @@
 package resource
 
-import "github.com/viant/afs/storage"
+import (
+	"context"
+	"github.com/viant/afs"
+	"github.com/viant/afs/storage"
+	"strings"
+	"time"
+)
 
-//Assets represents storage assets
-type Assets map[string]storage.Object
-
-//Deleted calls a callback with deleted assets
-func (a Assets) Deleted(assets Assets, fn func(object storage.Object)) {
-	for URL, asset := range a {
-		if _, ok := assets[URL]; !ok {
-			fn(asset)
-			delete(a, URL)
-		}
-	}
+//Asset represents a storage asset
+type Asset struct {
+	SourceURL      string
+	Compressed     bool
+	Source         storage.Object
+	CheckFrequency time.Duration
+	next           storage.Object
+	nextCheck      time.Time
 }
 
-//Modified calls a callback with modified assets
-func (a Assets) Modified(assets Assets, fn func(object storage.Object)) {
-	for URL, asset := range assets {
-		if prev, ok := a[URL]; ok {
-			if prev.ModTime() != asset.ModTime() {
-				fn(asset)
-				a[URL] = assets[URL]
-			}
-		}
+func (m *Asset) URL() string {
+	if m.Compressed && strings.HasPrefix(m.SourceURL, ".gzip") {
+		return m.SourceURL + ".gzip"
 	}
+	return m.SourceURL
 }
 
-//Added calls a callback with added assets
-func (a Assets) Added(assets Assets, fn func(object storage.Object)) {
-	for URL, asset := range assets {
-		if _, ok := a[URL]; !ok {
-			fn(asset)
-			a[URL] = assets[URL]
-		}
+func (m *Asset) IsCheckDue(now time.Time) bool {
+	if m.nextCheck.IsZero() || now.After(m.nextCheck) {
+		m.nextCheck = now.Add(m.CheckFrequency)
+		return true
 	}
+	return false
 }
 
-func NewAssets(assets []storage.Object) Assets {
-	var result = make(map[string]storage.Object)
-	for i, asset := range assets {
-		if asset.IsDir() {
-			continue
-		}
-		result[asset.URL()] = assets[i]
+func (m *Asset) HasChanged(ctx context.Context, fs afs.Service) (bool, error) {
+	now := time.Now()
+	if !m.IsCheckDue(now) {
+		return false, nil
 	}
-	return result
+	next, err := fs.Object(ctx, m.SourceURL)
+	if err != nil {
+		return false, err
+	}
+	m.next = next
+	return next.ModTime().Equal(m.Source.ModTime()), nil
+}
+
+func (m *Asset) Sync() {
+	m.Source = m.next
+	m.next = nil
 }
