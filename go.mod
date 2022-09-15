@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/pubsub v1.10.1
 	github.com/aws/aws-lambda-go v1.23.0
 	github.com/aws/aws-sdk-go v1.37.33
+	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
 	github.com/francoispqt/gojay v1.2.13
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/consul/api v1.8.1
@@ -18,6 +19,7 @@ require (
 	github.com/viant/gmetric v0.2.6
 	github.com/viant/tapper v0.6.3
 	github.com/viant/toolbox v0.33.2
+	github.com/viant/xunsafe v0.8.0
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
 	golang.org/x/oauth2 v0.0.0-20210313182246-cd4f82c27b84
 	google.golang.org/api v0.42.0
