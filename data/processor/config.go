@@ -42,6 +42,7 @@ type (
 		ScannerBufferMB     int    //use in case you see bufio.Scanner: token too long
 		MetricPort          int    //if specified HTTP endpoint port to expose metrics
 		RowTypeName         string // parquet/json row type
+		OnMirrorURL         string //OnMirror represents copy url of the resource
 	}
 )
 

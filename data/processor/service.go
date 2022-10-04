@@ -49,6 +49,10 @@ func (s *Service) Do(ctx context.Context, request *Request) Reporter {
 	response.SourceURL = request.SourceURL
 	response.StartTime = request.StartTime
 	var err error
+	err = s.onMirror(context.Background(),request)
+	if err != nil {
+		response.LogError(err)
+	}
 	if request.SourceType == Parquet {
 		err = s.do(ctx, request, reporter, s.loadParquetData)
 	} else { // CSV and JSON
@@ -471,8 +475,16 @@ func (s *Service) onDone(ctx context.Context, request *Request) error {
 		destURL := url.Join(s.Config.OnDoneURL, urlPath)
 		return s.fs.Move(ctx, request.SourceURL, destURL)
 	}
-
 	return nil
+}
+
+func (s *Service) onMirror(ctx context.Context, request *Request) error {
+	if s.Config.OnMirrorURL == "" || url.Scheme(request.SourceURL, "") == "" {
+		return nil
+	}
+	urlPath := url.Path(request.SourceURL)
+	mirrorURL := url.Join(s.Config.OnMirrorURL, urlPath)
+	return s.fs.Copy(ctx,request.SourceURL, mirrorURL)
 }
 
 func (s *Service) sortInput(reader io.Reader, response *Response) (io.Reader, error) {
