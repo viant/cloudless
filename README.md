@@ -1,4 +1,4 @@
-# cloudless - Serverless toolbox for golang
+# cloudless - Serverless runtime agnostic toolbox for golang
 
 [![GoReportCard](https://goreportcard.com/badge/github.com/viant/cloudless)](https://goreportcard.com/report/github.com/viant/cloudless)
 [![GoDoc](https://godoc.org/github.com/viant/cloudless?status.svg)](https://godoc.org/github.com/viant/cloudless)
@@ -9,9 +9,8 @@ Please refer to [`CHANGELOG.md`](CHANGELOG.md) if you encounter breaking changes
 
 ### Motivation
 
-The goal of this project is to identify and extract common serverless patterns
-into reusable components.
-
+The goal of this project is to identify and extract common serverless patterns  into reusable components.
+This project provides runtime agnostic abstractions enabling your application running locally or on any cloud runtime.
 
 ### Serverless components
 - [Cloud data processor](data/processor/README.md)
