@@ -3,7 +3,7 @@ package http
 import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/viant/cloudless/gateway"
-	"github.com/viant/cloudless/matcher"
+	"github.com/viant/cloudless/gateway/matcher"
 	"github.com/viant/toolbox"
 	"net/http"
 	"net/url"
