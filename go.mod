@@ -19,7 +19,6 @@ require (
 	github.com/viant/gmetric v0.2.6
 	github.com/viant/tapper v0.6.3
 	github.com/viant/toolbox v0.33.2
-	github.com/viant/xunsafe v0.8.0
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
 	golang.org/x/oauth2 v0.0.0-20210313182246-cd4f82c27b84
 	google.golang.org/api v0.42.0

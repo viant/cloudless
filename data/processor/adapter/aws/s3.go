@@ -10,8 +10,8 @@ import (
 	"github.com/viant/afs/storage"
 	_ "github.com/viant/afsc/s3"
 	"github.com/viant/cloudless/data/processor"
+	"github.com/viant/cloudless/data/processor/registry"
 	"github.com/viant/cloudless/ioutil"
-	"github.com/viant/cloudless/row_type"
 	"io"
 	"strings"
 	"time"
@@ -51,7 +51,7 @@ func (e S3Event) NewRequest(ctx context.Context, fs afs.Service, cfg *processor.
 		}
 		request.ReadCloser = reader
 		if request.SourceType == processor.JSON {
-			request.RowType = row_type.RowType(cfg.RowTypeName)
+			request.RowType = registry.RowType(cfg.RowTypeName)
 		}
 		if cfg.ReaderBufferSize == 0 {
 			buf := new(bytes.Buffer)
@@ -62,7 +62,7 @@ func (e S3Event) NewRequest(ctx context.Context, fs afs.Service, cfg *processor.
 			request.ReadCloser = io.NopCloser(bytes.NewReader(buf.Bytes()))
 		}
 	} else { // Parquet
-		if request.RowType = row_type.RowType(cfg.RowTypeName); request.RowType == nil {
+		if request.RowType = registry.RowType(cfg.RowTypeName); request.RowType == nil {
 			return nil, fmt.Errorf(" parquet type name '%s' not registered", cfg.RowTypeName)
 		}
 		buffer, err := fs.DownloadWithURL(ctx, URL)

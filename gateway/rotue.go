@@ -2,10 +2,11 @@ package gateway
 
 type (
 	Route struct {
-		URI       string
-		URIParams []string
-		Resource  *Resource
-		Security  *Security
+		URI        string
+		HTTPMethod string
+		URIParams  []string
+		Resource   *Resource
+		Security   *Security
 	}
 
 	Resource struct {
