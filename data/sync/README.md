@@ -9,3 +9,4 @@ selectively applies these changes with reusing non mutated state.
 
 To allow selective changes, snapshoter and keyer has to be implemented to retrieve a record key from byte array.
 Make sure this function is substantially cheaper than the record decoding function.
+

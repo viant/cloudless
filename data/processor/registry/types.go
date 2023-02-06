@@ -1,4 +1,4 @@
-package row_type
+package registry
 
 import "reflect"
 

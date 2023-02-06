@@ -1,0 +1,9 @@
+authorizers:
+  - ID: basicAuth
+    URL: blah
+routes:
+ - URI: /acl/{userId}
+   Resource:
+      URL: lambda_arn_URL
+   security:
+     Authorizer: basicAuth
