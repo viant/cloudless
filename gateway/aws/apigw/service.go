@@ -4,17 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	//"github.com/aws/aws-lambda-go/events"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/viant/cloudless/gateway"
+	apigwHttp "github.com/viant/cloudless/gateway/aws/apigw/http"
 	"net/http"
 )
 
 type Service struct {
-	cfg    *Config
-	client *lambda.Lambda
+	cfg       *Config
+	client    *lambda.Lambda
+	converter *Converter
 }
 
 func (s *Service) ensureClient() error {
@@ -40,34 +43,74 @@ func (s *Service) newSession() (*session.Session, error) {
 }
 
 func (s *Service) Do(writer http.ResponseWriter, request *http.Request) {
+	ctx := context.Background()
 
-	/*
-		match route
-		if route has autorizer call lambda it (extract Auhentication header as token to authoizer)
-		-> handle response if error not nill return
-		-> otherwise copy events.APIGatewayCustomAuthorizerResponse.Context to APiProxyRequest.APIGatewayProxyRequestContext.Authorizer map
-	*/
+	output, statusCode := s.do(ctx, request)
+	writer.WriteHeader(statusCode)
+	_, _ = writer.Write(output)
+}
 
+func (s *Service) do(ctx context.Context, request *http.Request) ([]byte, int) {
+	route, err := s.converter.FindRoute(request)
+	if err != nil {
+		return []byte(err.Error()), http.StatusNotFound
+	}
+
+	authorizer := map[string]interface{}{}
+	req := apigwHttp.Request(*request)
+
+	if route.Security != nil {
+		auth := request.Header.Get("Auuthorization")
+		if auth == "" {
+			return []byte(""), http.StatusUnauthorized
+		}
+
+		authSegments := strings.Split(auth, " ")
+		if len(authSegments) != 2 {
+			return []byte("incorrect Authorization header format"), http.StatusBadRequest
+		}
+
+		lambdaOutput, err := s.CallLambda(ctx, route.Resource, req.AuthorizerRequest())
+		if err != nil {
+			return []byte(err.Error()), http.StatusInternalServerError
+		}
+
+		if err = json.Unmarshal(lambdaOutput, &authorizer); err != nil {
+			return []byte(err.Error()), http.StatusInternalServerError
+		}
+	}
+
+	actualRequest := req.ProxyRequest(route, authorizer)
+
+	output, err := s.CallLambda(ctx, route.Resource, actualRequest)
+	if err != nil {
+		return output, http.StatusBadRequest
+	}
+
+	return output, http.StatusOK
 }
 
 func (s *Service) CallLambda(ctx context.Context, route *gateway.Resource, anEvent interface{}) ([]byte, error) {
 	if err := s.ensureClient(); err != nil {
 		return nil, err
 	}
+
 	payload, err := json.Marshal(anEvent)
 	if err != nil {
 		return nil, err
 	}
+
 	input := &lambda.InvokeInput{
 		FunctionName: &route.Name,
 		Payload:      payload,
 	}
+
 	output, err := s.client.InvokeWithContext(ctx, input)
 	if err != nil {
 		return nil, err
 	}
 	if output.FunctionError != nil {
-		return nil, fmt.Errorf("%w", *output.FunctionError)
+		return nil, fmt.Errorf("%v", *output.FunctionError)
 	}
 	return output.Payload, err
 }
