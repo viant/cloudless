@@ -250,6 +250,20 @@ func (m *Matcher) MatchOne(namespace, URI string) (Matchable, error) {
 	return m.Matchables[match[0].Matched[0]], nil
 }
 
+func (m *Matcher) MatchAll(namespace, URI string) []Matchable {
+	match, err := m.match(namespace, URI, true)
+	if err != nil {
+		return nil
+	}
+
+	matched := make([]Matchable, 0, len(match))
+	for _, node := range match {
+		matched = append(matched, m.Matchables[node.Matched[0]])
+	}
+
+	return matched
+}
+
 func NewMatcher(matchables []Matchable) *Matcher {
 	m := &Matcher{
 		Matchables: matchables,
