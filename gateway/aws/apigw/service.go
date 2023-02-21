@@ -17,7 +17,7 @@ import (
 type Service struct {
 	cfg       *Config
 	client    *lambda.Lambda
-	converter *Converter
+	converter *Router
 }
 
 func (s *Service) ensureClient() error {
@@ -60,7 +60,7 @@ func (s *Service) do(ctx context.Context, request *http.Request) ([]byte, int) {
 	req := apigwHttp.Request(*request)
 
 	if route.Security != nil {
-		auth := request.Header.Get("Auuthorization")
+		auth := request.Header.Get("Authorization")
 		if auth == "" {
 			return []byte(""), http.StatusUnauthorized
 		}
@@ -94,17 +94,14 @@ func (s *Service) CallLambda(ctx context.Context, route *gateway.Resource, anEve
 	if err := s.ensureClient(); err != nil {
 		return nil, err
 	}
-
 	payload, err := json.Marshal(anEvent)
 	if err != nil {
 		return nil, err
 	}
-
 	input := &lambda.InvokeInput{
 		FunctionName: &route.Name,
 		Payload:      payload,
 	}
-
 	output, err := s.client.InvokeWithContext(ctx, input)
 	if err != nil {
 		return nil, err
