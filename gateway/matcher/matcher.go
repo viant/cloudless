@@ -258,7 +258,9 @@ func (m *Matcher) MatchAll(namespace, URI string) []Matchable {
 
 	matched := make([]Matchable, 0, len(match))
 	for _, node := range match {
-		matched = append(matched, m.Matchables[node.Matched[0]])
+		for _, index := range node.Matched {
+			matched = append(matched, m.Matchables[index])
+		}
 	}
 
 	return matched
