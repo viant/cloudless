@@ -7,16 +7,48 @@ import (
 	"github.com/aws/aws-sdk-go/service/lambda"
 	"path"
 	"regexp"
+	"runtime"
 	"strconv"
+	"strings"
 )
 
 type (
 	FunctionConfig struct {
 		lambda.FunctionConfiguration
 		*Config
+		CodeURI string
 	}
 	FunctionConfigOption func(c *FunctionConfig)
 )
+
+func (c *FunctionConfig) MergeFrom(config *lambda.FunctionConfiguration) {
+	if c.Handler == nil {
+		c.Handler = config.Handler
+	}
+	if c.MemorySize == nil {
+		c.MemorySize = config.MemorySize
+	}
+	if c.Timeout == nil {
+		c.Timeout = config.Timeout
+	}
+	if c.Runtime == nil {
+		c.Runtime = config.Runtime
+	}
+	if c.Environment == nil {
+		c.Environment = &lambda.EnvironmentResponse{}
+	}
+	if config.Environment != nil && len(config.Environment.Variables) > 0 {
+		if len(c.Environment.Variables) == 0 {
+			c.Environment.Variables = map[string]*string{}
+		}
+		for k, v := range config.Environment.Variables {
+			if _, ok := c.Environment.Variables[k]; !ok {
+				c.Environment.Variables[k] = v
+			}
+		}
+	}
+
+}
 
 func (c *FunctionConfig) AddEnv(ctx context.Context, env *[]string, port int, xAmznTraceID string) error {
 	if err := c.Config.AddEnv(ctx, env); err != nil {
@@ -47,11 +79,14 @@ func (c *FunctionConfig) Init(cfg *Config) {
 	if c.Config == nil {
 		c.Config = cfg
 	}
+
 	if c.FunctionName == nil {
 		c.FunctionName = aws.String("test")
 	}
+	c.expandHandle()
+
 	if c.Version == nil {
-		c.Version = aws.String("test")
+		c.Version = aws.String("latest")
 	}
 	if c.MemorySize == nil {
 		c.MemorySize = aws.Int64(1536)
@@ -68,6 +103,14 @@ func (c *FunctionConfig) Init(cfg *Config) {
 	if c.FunctionArn == nil {
 		arn := arn(awsCred.Region, strconv.Itoa(c.AccountID), *c.FunctionName)
 		c.FunctionArn = &arn
+	}
+}
+
+func (c *FunctionConfig) expandHandle() {
+	if name := *c.Handler; name != "" {
+		name = strings.ReplaceAll(name, "${GOOS}", runtime.GOOS)
+		name = strings.ReplaceAll(name, "${GOARCH}", runtime.GOARCH)
+		*c.Handler = name
 	}
 }
 

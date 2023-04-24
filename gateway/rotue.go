@@ -3,6 +3,8 @@ package gateway
 type (
 	Authorizers []*Resource
 
+	Routes []*Route
+
 	Route struct {
 		URI        string
 		HTTPMethod string

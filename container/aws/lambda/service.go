@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-lambda-go/lambda/messages"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -36,6 +37,9 @@ func (s *Service) Init() {
 		ReadTimeout:  500 * time.Millisecond,
 		WriteTimeout: 500 * time.Millisecond,
 	}
+	for i := range s.Config.Functions {
+		s.Config.Functions[i].Init(s.Config)
+	}
 	s.enabledSighup()
 }
 
@@ -45,7 +49,7 @@ func (s *Service) enabledSighup() {
 	go func() {
 		<-sighupReceiver
 		fmt.Fprintln(os.Stderr, "sighup received, exiting runtime...")
-		s.server.Shutdown(context.Background())
+		s.Shutdown()
 		os.Exit(2)
 	}()
 }
@@ -93,17 +97,18 @@ func (s *Service) Start() {
 }
 
 func (s *Service) invokeFunction(name string, writer http.ResponseWriter, request *http.Request) error {
+	startTime := time.Now()
 	fn, err := s.Function(name)
 	if err != nil {
 		return err
 	}
-
+	lCtx := newContext(fn.Config, startTime, request)
+	defer logEndRequest(lCtx, fn.LogStream)
+	logStartRequest(lCtx, fn.LogStream)
 	payload, err := ioutil.ReadAll(request.Body)
 	if err != nil {
 		return err
 	}
-
-	lCtx := newContext(fn.Config)
 	deadline := lCtx.Deadline()
 	invokeRequest := &messages.InvokeRequest{
 		RequestId:          lCtx.RequestID,
@@ -116,18 +121,31 @@ func (s *Service) invokeFunction(name string, writer http.ResponseWriter, reques
 		ClientContext: []byte(lCtx.ClientContext),
 		Payload:       payload,
 	}
+
+	logInvokeStart(lCtx, fn.LogStream)
 	response, err := fn.Call(context.Background(), invokeRequest)
 	if err != nil {
+		fn.Stop()
+		s.lock.Lock()
+		delete(s.fn, name)
+		s.lock.Unlock()
+		lCtx.InvokeError = err.Error()
+		logInvokeError(lCtx, fn.LogStream)
 		return err
 	}
-	writer.Write(response.Payload)
+	lCtx.InvokeResponse = response.Payload
+	logInvokeEnd(lCtx, fn.LogStream)
+	if _, err = writer.Write(response.Payload); err == io.EOF {
+		err = nil
+	}
 	return err
 }
 
-func (s *Service) Stop() {
+func (s *Service) Shutdown() {
 	for _, fn := range s.fn {
 		_ = fn.Stop()
 	}
+	s.server.Shutdown(context.Background())
 }
 
 //New creates a service

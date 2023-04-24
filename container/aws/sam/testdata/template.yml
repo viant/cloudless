@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: An AWS Serverless Specification template describing your function.
+Resources:
+  adelphicaccountfeature:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: testdata/mylambda
+      Events:
+        Api1:
+          Type: Api
+          Properties:
+            Path: /mylambda/features/{id}
+            Method: GET
+        Api2:
+          Type: Api
+          Properties:
+            Path: /mylambda/features
+            Method: POST
+Globals:
+  Function:
+    Runtime: go1.x
+    Timeout: 30
+    Handler: function_${GOOS}_${GOARCH}
+    Environment:
+      Variables:
+        DB_DSN: >-
+          ci_ads:ci_ads@tcp(localhost:3306)/demo
+        MS_LOCAL: 'true'
+        API_BASE_URL: 'http://localhost:3000'
+        DEBUG: 'true'

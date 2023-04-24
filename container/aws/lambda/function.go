@@ -1,10 +1,11 @@
 package lambda
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"github.com/aws/aws-lambda-go/lambda/messages"
+	"github.com/viant/afs"
+	"github.com/viant/afs/file"
 	"io"
 	"net"
 	"net/rpc"
@@ -19,11 +20,11 @@ import (
 const connectionMaxAttempt = 100
 
 type Function struct {
-	Config *FunctionConfig
-	Cmd    *exec.Cmd
-	Port   int
-	Out    bytes.Buffer
-	client *rpc.Client
+	Config    *FunctionConfig
+	Cmd       *exec.Cmd
+	Port      int
+	LogStream io.WriteCloser
+	client    *rpc.Client
 }
 
 func (f *Function) Start(ctx context.Context, port int) error {
@@ -40,11 +41,15 @@ func (f *Function) Start(ctx context.Context, port int) error {
 		}
 		cmd = exec.Command(debug.Delve.Location, delveArgs...)
 	} else {
-		location := path.Join(f.Config.FuncLocation, *f.Config.FunctionName, *f.Config.Handler)
+		codeURI := f.Config.CodeURI
+		if codeURI == "" {
+			codeURI = path.Join(f.Config.FuncLocation, *f.Config.FunctionName)
+		}
+		location := path.Join(codeURI, *f.Config.Handler)
 		cmd = exec.Command(location)
 	}
-	cmd.Stdout = io.MultiWriter(os.Stdout, &f.Out)
-	cmd.Stderr = io.MultiWriter(os.Stderr, &f.Out)
+	cmd.Stdout = io.MultiWriter(os.Stdout, f.LogStream)
+	cmd.Stderr = io.MultiWriter(os.Stderr, f.LogStream)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := f.Config.AddEnv(ctx, &cmd.Env, port, ""); err != nil {
 		return err
@@ -57,6 +62,9 @@ func (f *Function) Start(ctx context.Context, port int) error {
 }
 
 func (f *Function) Stop() error {
+	if f.LogStream != nil {
+		f.LogStream.Close()
+	}
 	if f.Cmd == nil || f.Cmd.Process == nil {
 		return nil
 	}
@@ -113,6 +121,14 @@ func (f *Function) clientConnection() (net.Conn, error) {
 
 //NewFunction creates a function
 func NewFunction(config *FunctionConfig) (*Function, error) {
-	ret := &Function{Config: config}
+	name := *config.FunctionName
+	location := path.Join(config.BaseLogLocation(), name)
+	fs := afs.New()
+
+	writer, err := fs.NewWriter(context.Background(), location, file.DefaultFileOsMode)
+	if err != nil {
+		return nil, err
+	}
+	ret := &Function{Config: config, LogStream: writer}
 	return ret, nil
 }

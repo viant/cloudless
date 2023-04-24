@@ -58,7 +58,7 @@ func TestNew(t *testing.T) {
 
 			//	fmt.Printf("output: %s", output.Payload)
 		}
-		srv.Stop()
+		srv.Shutdown()
 	}
 }
 
