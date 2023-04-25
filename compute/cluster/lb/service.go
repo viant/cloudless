@@ -21,7 +21,7 @@ func (s *Service) cloudWatchService(region string) (*cloudwatch.CloudWatch, erro
 	return cw, nil
 }
 
-func (s *Service) CountNodes(requests ...*NodeCountRequest) ([]*NodeCountResponse, error) {
+func (s *Service) CountNodes(requests ...*NodeCountRequest) (NodeCountResponses, error) {
 	var responses = make([]*NodeCountResponse, 0)
 	for _, request := range requests {
 		nodeCountInRegion := 0
