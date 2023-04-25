@@ -39,6 +39,9 @@ func (s *Service) CountNodes(requests ...*NodeCountRequest) (NodeCountResponses,
 
 func (s *Service) getLoadBalancerMetrics(request *NodeCountRequest, loadBalancerName string) (int, error) {
 	service, err := s.cloudWatchService(request.Region)
+	if err != nil {
+		return 0, err
+	}
 	awsPeriod := int64(60)
 	input := cloudwatch.GetMetricStatisticsInput{
 		StartTime:  aws.Time(time.Now().UTC().Add(time.Second * -60)),
