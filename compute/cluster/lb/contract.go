@@ -22,3 +22,16 @@ func (c NodeCountResponses) NodeCount() int {
 	}
 	return nodeCount
 }
+
+type IPListRequest struct {
+	Region            string
+	LoadBalancerNames []*string
+}
+
+type IPListResponse struct {
+	Region           string
+	LoadBalancerName string
+	IPList           []string
+}
+
+type IPListResponses []*IPListResponse
