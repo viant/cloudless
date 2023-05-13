@@ -7,6 +7,7 @@ type Message struct {
 	Resource   *Resource
 	TraceID    string
 	Attributes map[string]interface{}
+	Subject    string
 	Data       interface{}
 }
 

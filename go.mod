@@ -7,6 +7,8 @@ require (
 	github.com/aws/aws-lambda-go v1.23.0
 	github.com/aws/aws-sdk-go v1.44.12
 	github.com/aws/aws-sdk-go-v2 v1.18.0
+	github.com/aws/aws-sdk-go-v2/config v1.18.3
+	github.com/aws/aws-sdk-go-v2/service/sns v1.20.11
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.22.0
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
 	github.com/francoispqt/gojay v1.2.13
@@ -38,7 +40,6 @@ require (
 	cloud.google.com/go/storage v1.27.0 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.18.3 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.3 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.19 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.33 // indirect

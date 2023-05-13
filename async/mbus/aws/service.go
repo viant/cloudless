@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
+	ntypes "github.com/aws/aws-sdk-go-v2/service/sns/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/viant/cloudless/async/mbus"
 	"github.com/viant/scy"
 	"github.com/viant/scy/cred"
 	"github.com/viant/toolbox"
+	"strings"
 	"sync"
 )
 
@@ -20,7 +23,13 @@ type Service struct {
 }
 
 func (s *Service) Push(ctx context.Context, dest *mbus.Resource, message *mbus.Message) (*mbus.Confirmation, error) {
-	return s.sendMessage(ctx, dest, message)
+	switch dest.Type {
+	case mbus.ResourceTypeTopic:
+		return s.publishMessage(ctx, dest, message)
+	case mbus.ResourceTypeQueue:
+		return s.sendMessage(ctx, dest, message)
+	}
+	return nil, fmt.Errorf("unsupported resource type: %v", dest.Type)
 }
 
 func (s *Service) sendMessage(ctx context.Context, dest *mbus.Resource, message *mbus.Message) (*mbus.Confirmation, error) {
@@ -42,7 +51,7 @@ func (s *Service) sendMessage(ctx context.Context, dest *mbus.Resource, message 
 	}
 
 	input.MessageBody = aws.String(string(body))
-	client, err := s.client(ctx, dest)
+	client, err := s.sqsClient(ctx, dest)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +66,7 @@ func (s *Service) sendMessage(ctx context.Context, dest *mbus.Resource, message 
 }
 
 func (s *Service) getQueueURL(ctx context.Context, resource *mbus.Resource) (string, error) {
-	client, err := s.client(ctx, resource)
+	client, err := s.sqsClient(ctx, resource)
 	if err != nil {
 		return "", err
 	}
@@ -71,7 +80,7 @@ func (s *Service) getQueueURL(ctx context.Context, resource *mbus.Resource) (str
 }
 
 //queue returns queue
-func (s *Service) client(ctx context.Context, dest *mbus.Resource) (*sqs.Client, error) {
+func (s *Service) sqsClient(ctx context.Context, dest *mbus.Resource) (*sqs.Client, error) {
 	dest.Lock()
 	if dest.Client != nil {
 		if ret, ok := dest.Client.(*sqs.Client); ok {
@@ -87,6 +96,26 @@ func (s *Service) client(ctx context.Context, dest *mbus.Resource) (*sqs.Client,
 		cfg.Region = dest.Region
 	}
 	client := sqs.NewFromConfig(*cfg)
+	dest.Client = client
+	return client, nil
+}
+
+func (s *Service) snsClient(ctx context.Context, dest *mbus.Resource) (*sns.Client, error) {
+	dest.Lock()
+	if dest.Client != nil {
+		if ret, ok := dest.Client.(*sns.Client); ok {
+			return ret, nil
+		}
+	}
+	defer dest.Unlock()
+	cfg, err := s.awsConfig(ctx, dest)
+	if err != nil {
+		return nil, err
+	}
+	if dest.Region != "" {
+		cfg.Region = dest.Region
+	}
+	client := sns.NewFromConfig(*cfg)
 	dest.Client = client
 	return client, nil
 }
@@ -117,6 +146,68 @@ func (s *Service) loadAwsCredentials(ctx context.Context, resource *scy.Resource
 	return ret, nil
 }
 
+func (s *Service) publishMessage(ctx context.Context, dest *mbus.Resource, message *mbus.Message) (*mbus.Confirmation, error) {
+	topicARN, err := s.getTopicARN(ctx, dest)
+	if err != nil {
+		return nil, err
+	}
+	client, err := s.snsClient(ctx, dest)
+	if err != nil {
+		return nil, err
+	}
+	input := &sns.PublishInput{
+		MessageAttributes: map[string]ntypes.MessageAttributeValue{},
+		TopicArn:          aws.String(topicARN),
+	}
+	if len(message.Attributes) > 0 {
+		putSnsMessageAttributes(message.Attributes, input.MessageAttributes)
+	}
+	body, err := message.Payload()
+	if err != nil {
+		return nil, err
+	}
+	input.Message = aws.String(string(body))
+	input.Subject = aws.String(message.Subject)
+	result, err := client.Publish(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	if err != nil {
+		return nil, err
+	}
+	confirmation := &mbus.Confirmation{
+		MessageID: *result.MessageId,
+	}
+	return confirmation, nil
+}
+
+func (s *Service) getTopicARN(ctx context.Context, dest *mbus.Resource) (string, error) {
+	input := &sns.ListTopicsInput{}
+	client, err := s.snsClient(ctx, dest)
+	if err != nil {
+		return "", err
+	}
+
+	for { //TODO look into better way to get topic URL
+		output, err := client.ListTopics(ctx, input)
+		if err != nil {
+			return "", err
+		}
+		for _, topic := range output.Topics {
+			parts := strings.Split(*topic.TopicArn, ":")
+			candidate := parts[len(parts)-1]
+			if candidate == dest.Name {
+				return *topic.TopicArn, nil
+			}
+		}
+		input.NextToken = output.NextToken
+		if output.NextToken == nil {
+			break
+		}
+	}
+	return "", fmt.Errorf("failed to lookup topic URL %v", dest.Name)
+}
+
 func putSqsMessageAttributes(attributes map[string]interface{}, target map[string]types.MessageAttributeValue) {
 	for k, v := range attributes {
 		if v == nil {
@@ -136,6 +227,19 @@ func getAttributeDataType(value interface{}) string {
 		dataType = "Number"
 	}
 	return dataType
+}
+
+func putSnsMessageAttributes(attributes map[string]interface{}, target map[string]ntypes.MessageAttributeValue) {
+	for k, v := range attributes {
+		if v == nil {
+			continue
+		}
+		dataType := getAttributeDataType(v)
+		target[k] = ntypes.MessageAttributeValue{
+			DataType:    &dataType,
+			StringValue: aws.String(toolbox.AsString(v)),
+		}
+	}
 }
 
 func New() *Service {
