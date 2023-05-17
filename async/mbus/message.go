@@ -1,6 +1,9 @@
 package mbus
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strconv"
+)
 
 type Message struct {
 	ID         string
@@ -16,6 +19,10 @@ func (m *Message) Payload() ([]byte, error) {
 		return nil, nil
 	}
 	switch actual := m.Data.(type) {
+	case int:
+		return []byte(strconv.Itoa(actual)), nil
+	case float64:
+		return []byte(strconv.FormatFloat(actual, 'f', 32, 5)), nil
 	case string:
 		return []byte(actual), nil
 	case []byte:

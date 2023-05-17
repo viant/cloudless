@@ -167,7 +167,9 @@ func (s *Service) publishMessage(ctx context.Context, dest *mbus.Resource, messa
 		return nil, err
 	}
 	input.Message = aws.String(string(body))
-	input.Subject = aws.String(message.Subject)
+	if message.Subject != "" {
+		input.Subject = aws.String(message.Subject)
+	}
 	result, err := client.Publish(ctx, input)
 	if err != nil {
 		return nil, err
