@@ -132,9 +132,10 @@ func (s *Service) reuseItemWithChecksum(rawLine []byte, nextChecksum *checksum, 
 	}
 
 	if previous, ok := sync.checksum.get(key); ok && next == previous {
-		itemValue := reflect.New(sync.Type)
+		itemValue := reflect.New(sync.Type) //**T
 		item := itemValue.Interface()
 		if sync.Snapshoter(key, item) {
+			//.Elem() changes **T to *T
 			if ok, err := sync.Handler(itemValue.Elem().Interface()); !ok || err != nil {
 				return ok, err
 			}
@@ -144,7 +145,7 @@ func (s *Service) reuseItemWithChecksum(rawLine []byte, nextChecksum *checksum, 
 	return false, nil
 }
 
-//New creates a sync service
+// New creates a sync service
 func New() *Service {
 	return &Service{
 		fs: afs.New(),
