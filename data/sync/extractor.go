@@ -22,6 +22,7 @@ func IntKeyJSONExtractor(key string) func(data []byte) (interface{}, error) {
 func StringKeyJSONExtractor(key string) func(data []byte) (interface{}, error) {
 	return func(data []byte) (interface{}, error) {
 		value, i, err := extractJSONKeyValue(data, key)
+		value = strings.Trim(value, "\"")
 		if err != nil {
 			return i, err
 		}
