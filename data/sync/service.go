@@ -114,6 +114,7 @@ func (s *Service) unmarshalLine(sync *Synchronization, rawLine []byte, item inte
 		if err := gojay.Unmarshal(rawLine, item); err != nil {
 			return false, fmt.Errorf("failed unmarshal JSON  %v line: %v, %w", sync.URL(), lineIndex, err)
 		}
+		return true, nil
 	}
 	if err := json.Unmarshal(rawLine, item); err != nil {
 		return false, fmt.Errorf("failed unmarshal JSON  %v line: %v, %w", sync.URL(), lineIndex, err)
