@@ -21,6 +21,11 @@ type Service struct {
 }
 
 func (s *Service) Sync(ctx context.Context, sync *Synchronization) error {
+	obj, err := s.fs.Object(ctx, sync.URL())
+	if err != nil {
+		return fmt.Errorf("failed to get ModTime %v, %w", sync.URL(), err)
+	}
+	sync.ModTime = obj.ModTime()
 	reader, err := s.fs.OpenURL(ctx, sync.URL())
 	if err != nil {
 		return fmt.Errorf("failed to open %v, %w", sync.URL(), err)

@@ -8,10 +8,11 @@ import (
 	"time"
 )
 
-//Asset represents a storage asset
+// Asset represents a storage asset
 type Asset struct {
 	SourceURL      string
 	Compressed     bool
+	ModTime        time.Time
 	Source         storage.Object
 	CheckFrequency time.Duration
 	next           storage.Object
