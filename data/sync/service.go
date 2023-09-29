@@ -12,7 +12,6 @@ import (
 	"github.com/viant/afs"
 	"io"
 	"reflect"
-	"sort"
 )
 
 type Service struct {
@@ -25,7 +24,7 @@ func (s *Service) Sync(ctx context.Context, sync *Synchronization) error {
 	if err != nil {
 		return fmt.Errorf("failed to get ModTime %v, %w", sync.URL(), err)
 	}
-	sync.ModTime = obj.ModTime()
+	sync.Source = obj
 	reader, err := s.fs.OpenURL(ctx, sync.URL())
 	if err != nil {
 		return fmt.Errorf("failed to open %v, %w", sync.URL(), err)
@@ -96,11 +95,6 @@ func (s *Service) Sync(ctx context.Context, sync *Synchronization) error {
 		}
 	}
 
-	if len(nextChecksum.intKeys) > 0 {
-		sort.Sort(&intChecksum{nextChecksum})
-	} else {
-		sort.Sort(&stringsChecksum{nextChecksum})
-	}
 	s.checksums.put(sync.URL(), nextChecksum)
 	return nil
 }

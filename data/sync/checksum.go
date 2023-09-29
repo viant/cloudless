@@ -49,15 +49,16 @@ func (c *checksum) get(key interface{}) (complex128, bool) {
 }
 
 func (c *checksum) put(key interface{}, checksum complex128) error {
+	var index int
 	switch k := key.(type) {
 	case int:
-		c.intKeys = append(c.intKeys, k)
+		c.intKeys, index = insertInt(c.intKeys, k)
 	case string:
-		c.keys = append(c.keys, k)
+		c.keys, index = insertString(c.keys, k)
 	default:
 		return fmt.Errorf("unsupported key: %T", key)
 	}
-	c.hash = append(c.hash, checksum)
+	c.hash = insertComplex128At(c.hash, index, checksum)
 	return nil
 }
 
@@ -121,4 +122,33 @@ func (s *stringsChecksum) Swap(i, j int) {
 // Less is part of sort.Interface. It is implemented by calling the "by" closure in the sorter.
 func (s *stringsChecksum) Less(i, j int) bool {
 	return s.intKeys[i] < s.intKeys[j]
+}
+
+func insertInt(data []int, v int) ([]int, int) {
+	if l := len(data); l == 0 || data[l-1] <= v {
+		return append(data, v), l
+	}
+	i := sort.SearchInts(data, v)
+	data = append(data[:i+1], data[i:]...)
+	data[i] = v
+	return data, i
+}
+
+func insertString(data []string, v string) ([]string, int) {
+	if l := len(data); l == 0 || data[l-1] <= v {
+		return append(data, v), l
+	}
+	i := sort.SearchStrings(data, v)
+	data = append(data[:i+1], data[i:]...)
+	data[i] = v
+	return data, i
+}
+
+func insertComplex128At(data []complex128, i int, v complex128) []complex128 {
+	if i == len(data) {
+		return append(data, v)
+	}
+	data = append(data[:i+1], data[i:]...)
+	data[i] = v
+	return data
 }
