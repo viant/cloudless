@@ -106,7 +106,7 @@ func TestTracker_HasChanged(t *testing.T) {
 		}
 		tracker := resource.New(useCase.baseURL, useCase.checkFrequency)
 		initialResourcesCount := 0
-		err = tracker.Notify(ctx, fs, func(URL string, operation resource.Operation) error {
+		err = tracker.Notify(ctx, fs, func(ctx context.Context, URL string, operation resource.Operation) error {
 			initialResourcesCount++
 			return nil
 		})
@@ -123,7 +123,7 @@ func TestTracker_HasChanged(t *testing.T) {
 		}
 		time.Sleep(useCase.sleepDuration)
 		actual := make(map[string]resource.Operation)
-		err = tracker.Notify(ctx, fs, func(URL string, operation resource.Operation) error {
+		err = tracker.Notify(ctx, fs, func(ctx context.Context, URL string, operation resource.Operation) error {
 			actual[URL] = operation
 			return nil
 		})
@@ -137,7 +137,7 @@ func ExampleTracker_Notify() {
 	watchURL := "myProto://myBucket/myFolder"
 	tracker := resource.New(watchURL, time.Second)
 	fs := afs.New()
-	err := tracker.Notify(context.Background(), fs, func(URL string, operation resource.Operation) error {
+	err := tracker.Notify(context.Background(), fs, func(ctx context.Context, URL string, operation resource.Operation) error {
 		switch operation {
 		case resource.Added:
 			fmt.Printf("addd :%v", URL)
