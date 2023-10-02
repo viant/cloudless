@@ -46,7 +46,7 @@ func (m *Tracker) hasChanges(assets []storage.Object) bool {
 
 }
 
-//Watch checks resources in the background thread and calls callback if any modification, or calls error handler if error
+// Watch checks resources in the background thread and calls callback if any modification, or calls error handler if error
 func (m *Tracker) Watch(ctx context.Context, fs afs.Service, callback func(URL string, operation Operation), onError func(err error)) {
 	go m.watch(ctx, fs, callback, onError)
 }
@@ -61,7 +61,7 @@ func (m *Tracker) watch(ctx context.Context, fs afs.Service, callback func(URL s
 	}
 }
 
-//Notify returns true if resource under base URL have changed
+// Notify returns true if resource under base URL have changed
 func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL string, operation Operation)) error {
 	if m.watchURL == "" {
 		return nil
@@ -83,16 +83,27 @@ func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL 
 	if len(m.assets) == 0 {
 		m.assets = make(map[string]storage.Object)
 	}
+
+	wg := sync.WaitGroup{}
 	m.assets.Added(assets, func(object storage.Object) {
-		callback(object.URL(), Added)
+		wg.Add(1)
+		go m.callInBackground(&wg, object.URL(), Added, callback)
 	})
 	m.assets.Modified(assets, func(object storage.Object) {
-		callback(object.URL(), Modified)
+		wg.Add(1)
+		go m.callInBackground(&wg, object.URL(), Modified, callback)
 	})
 	m.assets.Deleted(assets, func(object storage.Object) {
-		callback(object.URL(), Deleted)
+		wg.Add(1)
+		go m.callInBackground(&wg, object.URL(), Deleted, callback)
 	})
+	wg.Wait()
 	return nil
+}
+
+func (m *Tracker) callInBackground(wg *sync.WaitGroup, URL string, operation Operation, callback func(URL string, operation Operation)) {
+	wg.Done()
+	callback(URL, operation)
 }
 
 func New(watchURL string, checkFrequency time.Duration) *Tracker {
