@@ -19,7 +19,7 @@ type (
 		nextCheck      time.Time
 	}
 
-	Callback func(ctx context.Context, URL string, operation Operation) error
+	Callback func(ctx context.Context, object storage.Object, operation Operation) error
 )
 
 func (m *Tracker) isCheckDue(now time.Time) bool {
@@ -92,15 +92,15 @@ func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback Callback)
 	wg := sync.WaitGroup{}
 	m.assets.Added(ctx, assets, func(ctx context.Context, object storage.Object) {
 		wg.Add(1)
-		go m.callInBackground(ctx, &wg, errors, object.URL(), Added, callback)
+		go m.callInBackground(ctx, &wg, errors, object, Added, callback)
 	})
 	m.assets.Modified(ctx, assets, func(ctx context.Context, object storage.Object) {
 		wg.Add(1)
-		go m.callInBackground(ctx, &wg, errors, object.URL(), Modified, callback)
+		go m.callInBackground(ctx, &wg, errors, object, Modified, callback)
 	})
 	m.assets.Deleted(ctx, assets, func(ctx context.Context, object storage.Object) {
 		wg.Add(1)
-		go m.callInBackground(ctx, &wg, errors, object.URL(), Deleted, callback)
+		go m.callInBackground(ctx, &wg, errors, object, Deleted, callback)
 	})
 	wg.Wait()
 	if errors.HasError() {
@@ -109,9 +109,9 @@ func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback Callback)
 	return nil
 }
 
-func (m *Tracker) callInBackground(ctx context.Context, wg *sync.WaitGroup, err *Error, URL string, operation Operation, callback Callback) {
+func (m *Tracker) callInBackground(ctx context.Context, wg *sync.WaitGroup, err *Error, object storage.Object, operation Operation, callback Callback) {
 	wg.Done()
-	err.Append(callback(ctx, URL, operation))
+	err.Append(callback(ctx, object, operation))
 }
 
 func New(watchURL string, checkFrequency time.Duration) *Tracker {
