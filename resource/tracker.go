@@ -110,7 +110,7 @@ func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback Callback)
 }
 
 func (m *Tracker) callInBackground(ctx context.Context, wg *sync.WaitGroup, err *Error, object storage.Object, operation Operation, callback Callback) {
-	wg.Done()
+	defer wg.Done()
 	err.Append(callback(ctx, object, operation))
 }
 
