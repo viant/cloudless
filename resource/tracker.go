@@ -22,7 +22,7 @@ type (
 	Callback func(ctx context.Context, object storage.Object, operation Operation) error
 )
 
-func (m *Tracker) isCheckDue(now time.Time) bool {
+func (m *Tracker) IsCheckDue(now time.Time) bool {
 	if m.nextCheck.IsZero() || now.After(m.nextCheck) {
 		m.nextCheck = now.Add(m.checkFrequency)
 		return true
@@ -70,7 +70,7 @@ func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback Callback)
 	if m.watchURL == "" {
 		return nil
 	}
-	if !m.isCheckDue(time.Now()) {
+	if !m.IsCheckDue(time.Now()) {
 		return nil
 	}
 
