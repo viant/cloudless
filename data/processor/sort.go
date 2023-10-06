@@ -37,7 +37,7 @@ type (
 	}
 )
 
-//Fields
+// Fields
 type Fields struct {
 	Sort
 	values map[string]interface{}
@@ -89,7 +89,7 @@ func (f *Field) Value(data []byte, spec *Spec) interface{} {
 	return fields.values[f.Name]
 }
 
-//Order orders the reader data
+// Order orders the reader data
 func (s Sort) Order(reader io.Reader, config *Config) (io.Reader, error) {
 	scanner := bufio.NewScanner(reader)
 	if config != nil {
@@ -123,7 +123,7 @@ func (s Sort) Order(reader io.Reader, config *Config) (io.Reader, error) {
 		sorables.Items[lastIndex] = bytes.Trim(last, "\n")
 	}
 	return ioutil.BytesSliceReader(sorables.Items), nil
-	//data := bytes.Join(sorables.Items, []byte("\n"))
+	//data := bytes.Join(sorables.Errors, []byte("\n"))
 	//return bytes.NewReader(data), err
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/viant/afs"
 	"github.com/viant/afs/asset"
 	"github.com/viant/afs/file"
+	"github.com/viant/afs/storage"
 	"github.com/viant/cloudless/resource"
 	"log"
 	"testing"
@@ -106,8 +107,9 @@ func TestTracker_HasChanged(t *testing.T) {
 		}
 		tracker := resource.New(useCase.baseURL, useCase.checkFrequency)
 		initialResourcesCount := 0
-		err = tracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
+		err = tracker.Notify(ctx, fs, func(ctx context.Context, object storage.Object, operation resource.Operation) error {
 			initialResourcesCount++
+			return nil
 		})
 		assert.Nil(t, err, useCase.description)
 		assert.Equal(t, len(useCase.fsAtT0), initialResourcesCount, useCase.description)
@@ -122,8 +124,9 @@ func TestTracker_HasChanged(t *testing.T) {
 		}
 		time.Sleep(useCase.sleepDuration)
 		actual := make(map[string]resource.Operation)
-		err = tracker.Notify(ctx, fs, func(URL string, operation resource.Operation) {
-			actual[URL] = operation
+		err = tracker.Notify(ctx, fs, func(ctx context.Context, object storage.Object, operation resource.Operation) error {
+			actual[object.URL()] = operation
+			return nil
 		})
 
 		assert.EqualValues(t, useCase.expected, actual, useCase.description)
@@ -135,15 +138,16 @@ func ExampleTracker_Notify() {
 	watchURL := "myProto://myBucket/myFolder"
 	tracker := resource.New(watchURL, time.Second)
 	fs := afs.New()
-	err := tracker.Notify(context.Background(), fs, func(URL string, operation resource.Operation) {
+	err := tracker.Notify(context.Background(), fs, func(ctx context.Context, object storage.Object, operation resource.Operation) error {
 		switch operation {
 		case resource.Added:
-			fmt.Printf("addd :%v", URL)
+			fmt.Printf("addd :%v", object.URL())
 		case resource.Modified:
-			fmt.Printf("addd :%v", URL)
+			fmt.Printf("addd :%v", object.URL())
 		case resource.Deleted:
-			fmt.Printf("addd :%v", URL)
+			fmt.Printf("addd :%v", object.URL())
 		}
+		return nil
 	})
 	if err != nil {
 		log.Fatal(err)

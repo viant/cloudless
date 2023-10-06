@@ -10,15 +10,19 @@ import (
 	"time"
 )
 
-type Tracker struct {
-	watchURL       string
-	assets         Assets
-	mutex          sync.Mutex
-	checkFrequency time.Duration
-	nextCheck      time.Time
-}
+type (
+	Tracker struct {
+		watchURL       string
+		assets         Assets
+		mutex          sync.Mutex
+		checkFrequency time.Duration
+		nextCheck      time.Time
+	}
 
-func (m *Tracker) isCheckDue(now time.Time) bool {
+	Callback func(ctx context.Context, object storage.Object, operation Operation) error
+)
+
+func (m *Tracker) IsCheckDue(now time.Time) bool {
 	if m.nextCheck.IsZero() || now.After(m.nextCheck) {
 		m.nextCheck = now.Add(m.checkFrequency)
 		return true
@@ -46,12 +50,12 @@ func (m *Tracker) hasChanges(assets []storage.Object) bool {
 
 }
 
-//Watch checks resources in the background thread and calls callback if any modification, or calls error handler if error
-func (m *Tracker) Watch(ctx context.Context, fs afs.Service, callback func(URL string, operation Operation), onError func(err error)) {
+// Watch checks resources in the background thread and calls callback if any modification, or calls error handler if error
+func (m *Tracker) Watch(ctx context.Context, fs afs.Service, callback Callback, onError func(err error)) {
 	go m.watch(ctx, fs, callback, onError)
 }
 
-func (m *Tracker) watch(ctx context.Context, fs afs.Service, callback func(URL string, operation Operation), onError func(err error)) {
+func (m *Tracker) watch(ctx context.Context, fs afs.Service, callback Callback, onError func(err error)) {
 	for {
 		err := m.Notify(ctx, fs, callback)
 		if err != nil {
@@ -61,12 +65,12 @@ func (m *Tracker) watch(ctx context.Context, fs afs.Service, callback func(URL s
 	}
 }
 
-//Notify returns true if resource under base URL have changed
-func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL string, operation Operation)) error {
+// Notify returns true if resource under base URL have changed
+func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback Callback) error {
 	if m.watchURL == "" {
 		return nil
 	}
-	if !m.isCheckDue(time.Now()) {
+	if !m.IsCheckDue(time.Now()) {
 		return nil
 	}
 
@@ -83,16 +87,31 @@ func (m *Tracker) Notify(ctx context.Context, fs afs.Service, callback func(URL 
 	if len(m.assets) == 0 {
 		m.assets = make(map[string]storage.Object)
 	}
-	m.assets.Added(assets, func(object storage.Object) {
-		callback(object.URL(), Added)
+
+	errors := &Error{}
+	wg := sync.WaitGroup{}
+	m.assets.Added(ctx, assets, func(ctx context.Context, object storage.Object) {
+		wg.Add(1)
+		go m.callInBackground(ctx, &wg, errors, object, Added, callback)
 	})
-	m.assets.Modified(assets, func(object storage.Object) {
-		callback(object.URL(), Modified)
+	m.assets.Modified(ctx, assets, func(ctx context.Context, object storage.Object) {
+		wg.Add(1)
+		go m.callInBackground(ctx, &wg, errors, object, Modified, callback)
 	})
-	m.assets.Deleted(assets, func(object storage.Object) {
-		callback(object.URL(), Deleted)
+	m.assets.Deleted(ctx, assets, func(ctx context.Context, object storage.Object) {
+		wg.Add(1)
+		go m.callInBackground(ctx, &wg, errors, object, Deleted, callback)
 	})
+	wg.Wait()
+	if errors.HasError() {
+		return errors
+	}
 	return nil
+}
+
+func (m *Tracker) callInBackground(ctx context.Context, wg *sync.WaitGroup, err *Error, object storage.Object, operation Operation, callback Callback) {
+	defer wg.Done()
+	err.Append(callback(ctx, object, operation))
 }
 
 func New(watchURL string, checkFrequency time.Duration) *Tracker {
