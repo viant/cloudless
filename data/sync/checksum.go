@@ -33,13 +33,13 @@ func (c *checksum) get(key interface{}) (complex128, bool) {
 	switch k := key.(type) {
 	case int:
 		index := sort.SearchInts(c.intKeys, k)
-		if index == len(c.intKeys) || index == -1 {
+		if index == len(c.intKeys) || c.intKeys[index] != k {
 			return 0, false
 		}
 		return c.hash[index], true
 	case string:
 		index := sort.SearchStrings(c.keys, k)
-		if index == len(c.keys) || index == -1 {
+		if index == len(c.keys) || c.keys[index] != k {
 			return 0, false
 		}
 		return c.hash[index], true
