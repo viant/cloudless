@@ -23,6 +23,7 @@ type (
 		WildcardMatcher *Node
 		urlIndex        map[string]int
 		positionIndex   map[int]bool
+		suffix          bool
 	}
 
 	NodeMatch struct {
@@ -42,7 +43,10 @@ func (n *Node) Add(routeIndex int, uri string) {
 
 	segment, remaining := extractSegment(uri)
 	var child *Node
-	if segment[0] == '{' {
+	if segment[0] == '*' {
+		child = n.getWildcardMatcher()
+		child.suffix = true
+	} else if segment[0] == '{' {
 		child = n.getWildcardMatcher()
 	} else {
 		child = n.getChildOrCreate(segment)
@@ -79,6 +83,10 @@ func (n *Node) Match(method, route string, exact bool, dest *[]*Node) {
 
 	node, ok := n.nextMatcher(segment)
 	if ok {
+		if node.suffix {
+			*dest = append(*dest, node)
+			return
+		}
 		node.Match(method, path, exact, dest)
 		return
 	}
@@ -221,7 +229,7 @@ func AsRelative(route string) string {
 	}
 
 	if i >= len(route)-1 {
-		return ""
+		return route
 	}
 
 	route = route[i:]
