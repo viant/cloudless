@@ -43,10 +43,10 @@ func (n *Node) Add(routeIndex int, uri string) {
 
 	segment, remaining := extractSegment(uri)
 	var child *Node
-	if segment[0] == '*' {
+	if len(segment) > 0 && segment[0] == '*' {
 		child = n.getWildcardMatcher()
 		child.suffix = true
-	} else if segment[0] == '{' {
+	} else if len(segment) > 0 && segment[0] == '{' {
 		child = n.getWildcardMatcher()
 	} else {
 		child = n.getChildOrCreate(segment)
