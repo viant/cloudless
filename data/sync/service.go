@@ -10,12 +10,15 @@ import (
 	"github.com/dgryski/go-farm"
 	"github.com/francoispqt/gojay"
 	"github.com/viant/afs"
+	"github.com/viant/afs/option"
+	"github.com/viant/afs/storage"
 	"io"
 	"reflect"
 )
 
 type Service struct {
-	fs afs.Service
+	fs        afs.Service
+	fsOptions []storage.Option
 	checksums
 }
 
@@ -25,7 +28,7 @@ func (s *Service) Sync(ctx context.Context, sync *Synchronization) error {
 		return fmt.Errorf("failed to get ModTime %v, %w", sync.URL(), err)
 	}
 	sync.Source = obj
-	reader, err := s.fs.OpenURL(ctx, sync.URL())
+	reader, err := s.fs.OpenURL(ctx, sync.URL(), s.fsOptions...)
 	if err != nil {
 		return fmt.Errorf("failed to open %v, %w", sync.URL(), err)
 	}
@@ -73,7 +76,6 @@ func (s *Service) Sync(ctx context.Context, sync *Synchronization) error {
 		}
 
 		if isKeyer {
-
 			if ok, err = s.reuseItemWithChecksum(rawLine, nextChecksum, sync); err != nil {
 				return err
 			}
@@ -146,9 +148,13 @@ func (s *Service) reuseItemWithChecksum(rawLine []byte, nextChecksum *checksum, 
 }
 
 // New creates a sync service
-func New() *Service {
+func New(fsOptions ...storage.Option) *Service {
+	if len(fsOptions) == 0 {
+		fsOptions = []storage.Option{option.NewStream(64*1024*1024, 0)}
+	}
 	return &Service{
-		fs: afs.New(),
+		fs:        afs.New(),
+		fsOptions: fsOptions,
 		checksums: checksums{
 			asset: make(map[string]*checksum),
 		},
