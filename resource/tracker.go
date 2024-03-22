@@ -22,6 +22,11 @@ type (
 	Callback func(ctx context.Context, object storage.Object, operation Operation) error
 )
 
+// NextCheck returns next check time
+func (m *Tracker) NextCheck() time.Time {
+	return m.nextCheck
+}
+
 func (m *Tracker) IsCheckDue(now time.Time) bool {
 	if m.nextCheck.IsZero() || now.After(m.nextCheck) {
 		m.nextCheck = now.Add(m.checkFrequency)
