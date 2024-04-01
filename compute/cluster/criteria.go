@@ -5,6 +5,7 @@ type Criteria struct {
 	Zone             string
 	AvailabilityZone string
 	Tags             []string
+	Labels           map[string]string
 	Project          string
 	URL              string
 	Service          string
