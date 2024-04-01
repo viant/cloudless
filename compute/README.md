@@ -91,9 +91,10 @@ func main() {
 		Api:     "GCP",
 		Cluster: "Cluster2",
 		Criteria: cluster.Criteria{
-			Project: "viant-e2e",
+			Project: "ppp",
 			Zone:    "us-east1-b",
 			Tags:    []string{"aerospike"},
+			Labels:  map[string]string,
 		},
 		HealthChecks: []cluster.HealthCheck{
 			{
@@ -109,6 +110,7 @@ func main() {
 
 }
 ```
+Multiple "Labels" criteria imply AND logic whle "Tags" do OR logic.
 
 #### Consul
 
