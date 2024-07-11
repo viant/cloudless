@@ -14,7 +14,7 @@ func TestEncodedResource_Decode(t *testing.T) {
 	}{
 		{
 			description: "valid resource",
-			encoded:     "s3_queue;aws;queue;s3_queue;us-west-1;~/.secret/aws-e2e.json",
+			encoded:     "s3_queue|aws|queue|s3_queue|us-west-1|~/.secret/aws-e2e.json",
 			expected: &Resource{
 				Name:   "s3_queue",
 				Vendor: "aws",

@@ -48,7 +48,12 @@ type EncodedResource string
 
 func (e EncodedResource) Decode() (*Resource, error) {
 	ret := &Resource{}
-	parts := strings.Split(string(e), ";")
+	var parts []string
+	if strings.Contains(string(e), "|") {
+		parts = strings.Split(string(e), "|")
+	} else {
+		parts = strings.Split(string(e), ";")
+	}
 	partLen := len(parts)
 	if partLen < 4 {
 		return nil, fmt.Errorf("faield to decode mbus resource: invalid format: %v, expected:name;vendor;resourceType;uri[;region;secretURL;secretKey]", e)
