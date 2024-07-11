@@ -79,7 +79,7 @@ func (s *Service) getQueueURL(ctx context.Context, resource *mbus.Resource) (str
 	return *result.QueueUrl, nil
 }
 
-//queue returns queue
+// queue returns queue
 func (s *Service) sqsClient(ctx context.Context, dest *mbus.Resource) (*sqs.Client, error) {
 	dest.Lock()
 	if dest.Client != nil {
@@ -135,7 +135,7 @@ func (s *Service) awsConfig(ctx context.Context, dest *mbus.Resource) (*aws.Conf
 
 func (s *Service) loadAwsCredentials(ctx context.Context, resource *scy.Resource) (*cred.Aws, error) {
 	srv := scy.New()
-	secret, err := srv.Load(ctx, scy.NewResource(&aws.Config{}, resource.URL, resource.Key))
+	secret, err := srv.Load(ctx, scy.NewResource(&cred.Aws{}, resource.URL, resource.Key))
 	if err != nil {
 		return nil, err
 	}
