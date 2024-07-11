@@ -82,12 +82,13 @@ func (s *Service) getQueueURL(ctx context.Context, resource *mbus.Resource) (str
 // queue returns queue
 func (s *Service) sqsClient(ctx context.Context, dest *mbus.Resource) (*sqs.Client, error) {
 	dest.Lock()
+	defer dest.Unlock()
 	if dest.Client != nil {
 		if ret, ok := dest.Client.(*sqs.Client); ok {
 			return ret, nil
 		}
 	}
-	defer dest.Unlock()
+
 	cfg, err := s.awsConfig(ctx, dest)
 	if err != nil {
 		return nil, err
