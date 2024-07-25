@@ -56,28 +56,29 @@ func (e EncodedResource) Decode() (*Resource, error) {
 		parts = strings.Split(string(e), ";")
 	}
 	partLen := len(parts)
-	if partLen < 4 {
-		return nil, fmt.Errorf("faield to decode mbus resource: invalid format: %v, expected:name;vendor;resourceType;uri[;region;secretURL;secretKey]", e)
+	if partLen < 5 {
+		return nil, fmt.Errorf("faield to decode mbus resource: invalid format: %v, expected:id|name|vendor|resourceType|uri[|region|secretURL|secretKey]", e)
 	}
-	ret.Name = parts[0]
-	ret.Vendor = parts[1]
-	ret.Type = parts[2]
+	ret.ID = parts[0]
+	ret.Name = parts[1]
+	ret.Vendor = parts[2]
+	ret.Type = parts[3]
 	switch ret.Type {
 	case ResourceTypeTopic, ResourceTypeQueue, ResourceTypeSubscription:
 	default:
 		return nil, fmt.Errorf("invalid resource: type: %v, expected:%v", ret.Type, []string{ResourceTypeTopic, ResourceTypeQueue, ResourceTypeSubscription})
 	}
-	ret.URL = parts[3]
-	if partLen > 4 {
-		ret.Region = parts[4]
+	ret.URL = parts[4]
+	if partLen > 5 {
+		ret.Region = parts[5]
 	}
 
-	if partLen > 5 {
+	if partLen > 6 {
 		ret.Credentials = &scy.Resource{
 			URL: parts[5],
 		}
 		if partLen > 6 {
-			ret.Credentials.Key = parts[6]
+			ret.Credentials.Key = parts[7]
 		}
 	}
 	return ret, nil
