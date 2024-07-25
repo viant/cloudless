@@ -14,6 +14,7 @@ const (
 )
 
 type Resource struct {
+	ID          string
 	Name        string
 	Region      string
 	Vendor      string
