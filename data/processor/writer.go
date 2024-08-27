@@ -11,7 +11,7 @@ import (
 	"sync"
 )
 
-//Writer represents text data writer
+// Writer represents text data writer
 type Writer struct {
 	writer  io.WriteCloser
 	mutex   sync.Mutex
@@ -22,6 +22,9 @@ type Writer struct {
 }
 
 func (w *Writer) Write(ctx context.Context, data []byte) (err error) {
+	if w == nil {
+		return nil
+	}
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	if w.counter == 0 {
@@ -45,7 +48,7 @@ func (w *Writer) Write(ctx context.Context, data []byte) (err error) {
 	return err
 }
 
-//Close closes the writer if there are any writes
+// Close closes the writer if there are any writes
 func (w *Writer) Close() error {
 	if w.counter == 0 {
 		return nil
@@ -53,7 +56,7 @@ func (w *Writer) Close() error {
 	return w.writer.Close()
 }
 
-//NewWriter creates a writer
+// NewWriter creates a writer
 func NewWriter(URL string, fs afs.Service) *Writer {
 	codec := ""
 	if strings.HasSuffix(URL, ".gz") {
