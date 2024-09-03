@@ -51,7 +51,7 @@ func (s *Service) Do(writer http.ResponseWriter, request *http.Request) {
 	if err != nil {
 		http.Error(writer, err.Error(), statucCode)
 	}
-	//_, _ = writer.Write(output)
+	//_, _ = writer.write(output)
 }
 
 func (s *Service) do(ctx context.Context, request *http.Request, writer http.ResponseWriter) (int, error) {
