@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-//OpenURL returns uncompressed data reader
+// OpenURL returns uncompressed data reader
 func OpenURL(ctx context.Context, fs afs.Service, URL string, options ...storage.Option) (io.ReadCloser, error) {
 	reader, err := fs.OpenURL(ctx, URL, options...)
 	if err != nil {
@@ -20,7 +20,7 @@ func OpenURL(ctx context.Context, fs afs.Service, URL string, options ...storage
 	return DataReader(reader, URL)
 }
 
-//DataReader returns uncompress data reader
+// DataReader returns uncompress data reader
 func DataReader(reader io.Reader, URL string) (io.ReadCloser, error) {
 	readCloser, ok := reader.(io.ReadCloser)
 	if !ok {
@@ -36,13 +36,13 @@ func DataReader(reader io.Reader, URL string) (io.ReadCloser, error) {
 	return &ReadCloser{ReadCloser: gzReader, Origin: readCloser}, nil
 }
 
-//ReadCloser represents a reader closer wrapper of original and wrapper reader
+// ReadCloser represents a reader closer wrapper of original and wrapper reader
 type ReadCloser struct {
 	Origin io.ReadCloser
 	io.ReadCloser
 }
 
-//Close closes readers
+// Stop closes readers
 func (c *ReadCloser) Close() error {
 	if err := c.Origin.Close(); err != nil {
 		return err
@@ -56,7 +56,7 @@ type bytesSliceReader struct {
 	xIndex int
 }
 
-//Read reads data
+// Read reads data
 func (b *bytesSliceReader) Read(out []byte) (n int, err error) {
 	if b.yIndex >= len(b.data) {
 		return 0, io.EOF
@@ -80,7 +80,7 @@ func (b *bytesSliceReader) Read(out []byte) (n int, err error) {
 	return partLen, nil
 }
 
-//BytesSliceReader creates a new byte slice reader
+// BytesSliceReader creates a new byte slice reader
 func BytesSliceReader(bytes [][]byte) io.Reader {
 	return &bytesSliceReader{data: bytes}
 }
