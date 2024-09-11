@@ -94,7 +94,9 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 						<-limiter
 					}
 					mux.Lock()
-					if ack.IsAck() {
+					if ack.IsNack() {
+						n.handleNacks(object, nacks, pending)
+					} else if ack.IsAck() {
 						delete(pending, object.URL())
 					}
 					mux.Unlock()
@@ -103,9 +105,10 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 				data, err := n.fs.DownloadWithURL(ctx, object.URL())
 				if err != nil {
 					ack.Error = err
+					_ = ack.Nack()
 					return
 				}
-				msg := &mbus.Message{}
+				msg := &mbus.Message{Data: make(map[string]interface{})}
 				if err := json.Unmarshal(data, msg); err != nil {
 					ack.Error = err
 					return
@@ -118,11 +121,6 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 				}
 				if err != nil {
 					_ = ack.Nack()
-				}
-				if ack.IsNack() {
-					mux.Lock()
-					n.handleNacks(object, nacks, pending)
-					mux.Unlock()
 				}
 
 			}(objects[i])
