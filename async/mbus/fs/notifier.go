@@ -19,7 +19,32 @@ type (
 		fs      afs.Service
 		stopped int32
 	}
+
+	pendings struct {
+		registry map[string]bool
+		mux      sync.RWMutex
+	}
 )
+
+func (p *pendings) add(URL string) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	p.registry[URL] = true
+
+}
+
+func (p *pendings) remove(URL string) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	delete(p.registry, URL)
+}
+
+func (p *pendings) has(URL string) bool {
+	p.mux.RLock()
+	defer p.mux.RUnlock()
+	_, has := p.registry[URL]
+	return has
+}
 
 func (n *Notifier) IsClosed() bool {
 	return atomic.LoadInt32(&n.stopped) == 1
@@ -38,8 +63,7 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 		return fmt.Errorf("URL was empty")
 	}
 	var nacks = make(map[string]int)
-	pending := make(map[string]bool)
-	var mux sync.RWMutex
+	pending := &pendings{registry: map[string]bool{}}
 	var limiter chan bool
 	if maxPending := options.MaxPending; maxPending > 0 {
 		limiter = make(chan bool, maxPending)
@@ -73,33 +97,28 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 			if object.IsDir() {
 				continue
 			}
-			mux.RLock()
-			isPending := pending[object.URL()]
-			mux.RUnlock()
-			if isPending {
+			if pending.has(object.URL()) {
 				continue
 			}
-			mux.Lock()
-			pending[object.URL()] = true
-			mux.Unlock()
+
+			pending.add(object.URL())
 
 			if limiter != nil {
 				limiter <- true
 			}
 
+			anObject := objects[i]
 			go func(object storage.Object) {
 				ack := &mbus.Acknowledgement{}
 				defer func() {
 					if limiter != nil {
 						<-limiter
 					}
-					mux.Lock()
 					if ack.IsNack() {
-						n.handleNacks(object, nacks, pending)
+						n.handleNack(object, nacks, pending)
 					} else if ack.IsAck() {
-						delete(pending, object.URL())
+						n.handleAck(ctx, object, pending)
 					}
-					mux.Unlock()
 				}()
 
 				data, err := n.fs.DownloadWithURL(ctx, object.URL())
@@ -111,6 +130,7 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 				msg := &mbus.Message{Data: make(map[string]interface{})}
 				if err := json.Unmarshal(data, msg); err != nil {
 					ack.Error = err
+					_ = ack.Nack()
 					return
 				}
 
@@ -123,17 +143,23 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 					_ = ack.Nack()
 				}
 
-			}(objects[i])
+			}(anObject)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 }
 
-func (n *Notifier) handleNacks(object storage.Object, nacks map[string]int, pending map[string]bool) {
+func (n *Notifier) handleAck(ctx context.Context, object storage.Object, pending *pendings) {
+	n.fs.Delete(ctx, object.URL())
+	pending.remove(object.URL())
+}
+
+func (n *Notifier) handleNack(object storage.Object, nacks map[string]int, pending *pendings) {
 	nacks[object.URL()]++
 	if nacks[object.URL()] > 3 {
 		parentPath, _ := url.Split(object.URL(), file.Scheme)
 		_ = n.fs.Move(context.Background(), object.URL(), url.Join(parentPath, "nack", object.Name()))
+		pending.remove(object.URL())
 	}
 }
 
