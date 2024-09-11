@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/viant/afs"
-	"github.com/viant/afs/option"
+	"github.com/viant/afs/file"
 	"github.com/viant/afs/storage"
+	"github.com/viant/afs/url"
 	"github.com/viant/cloudless/async/mbus"
 	"sync"
 	"sync/atomic"
@@ -36,6 +37,7 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 	if URL == "" {
 		return fmt.Errorf("URL was empty")
 	}
+	var nacks = make(map[string]int)
 	pending := make(map[string]bool)
 	var mux sync.RWMutex
 	var limiter chan bool
@@ -50,7 +52,7 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 		if n.IsClosed() {
 			return nil
 		}
-		objects, _ := n.fs.List(ctx, URL, option.NewRecursive(true))
+		objects, _ := n.fs.List(ctx, URL)
 		objectCount := 0
 		if len(objects) == 0 {
 			time.Sleep(300 * time.Millisecond)
@@ -114,9 +116,26 @@ func (n *Notifier) Observe(ctx context.Context, messanger mbus.Messenger, opts .
 						err = ack.Ack()
 					}
 				}
+				if err != nil {
+					_ = ack.Nack()
+				}
+				if ack.IsNack() {
+					mux.Lock()
+					n.handleNacks(object, nacks, pending)
+					mux.Unlock()
+				}
+
 			}(objects[i])
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func (n *Notifier) handleNacks(object storage.Object, nacks map[string]int, pending map[string]bool) {
+	nacks[object.URL()]++
+	if nacks[object.URL()] > 3 {
+		parentPath, _ := url.Split(object.URL(), file.Scheme)
+		_ = n.fs.Move(context.Background(), object.URL(), url.Join(parentPath, "nack", object.Name()))
 	}
 }
 
