@@ -42,6 +42,11 @@ func Register(vendor string, service Service) {
 	r.Register(vendor, service)
 }
 
+// RegisterNotifier register vendor notifier
+func RegisterNotifier(vendor string, notifier Notifier) {
+	r.RegisterNotifier(vendor, notifier)
+}
+
 // Lookup lookup service
 func Lookup(vendor string) Service {
 	return r.Lookup(vendor)
