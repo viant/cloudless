@@ -14,15 +14,15 @@ const (
 )
 
 type Resource struct {
-	ID          string
-	Name        string
-	Region      string
-	Vendor      string
-	URL         string
-	Credentials *scy.Resource
-	Type        string      `description:"resource type: topic, subscription"`
-	Client      interface{} `description:"client"`
-	sync.Mutex
+	ID          string        `yaml:"ID" json:",omitempty"`
+	Name        string        `yaml:"Name"  json:",omitempty"`
+	Region      string        `yaml:"Region"  json:",omitempty"`
+	Vendor      string        `yaml:"Vendor"  json:",omitempty"`
+	URL         string        `yaml:"URL"  json:",omitempty"`
+	Credentials *scy.Resource `yaml:"Resource"  json:",omitempty"`
+	Type        string        `description:"resource type: topic, subscription" yaml:"Type"  json:",omitempty"`
+	Client      interface{}   `description:"client" yaml:"-"`
+	sync.Mutex  `yaml:"-" json:"-"`
 }
 
 func (r *Resource) Init() error {

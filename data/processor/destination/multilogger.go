@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-//MultiLogger represents a multi logger
+// MultiLogger represents a multi logger
 type MultiLogger struct {
 	mux      sync.RWMutex
 	loggers  map[string]*log.Logger
@@ -18,7 +18,7 @@ type MultiLogger struct {
 	keyName  string
 }
 
-//Get gets or creates a new logger
+// Get gets or creates a new logger
 func (m *MultiLogger) Get(key string) (*log.Logger, error) {
 	m.mux.RLock()
 	logger, ok := m.loggers[key]
@@ -38,12 +38,12 @@ func (m *MultiLogger) Get(key string) (*log.Logger, error) {
 	URL = m.ReplaceKeyName(URL, key)
 
 	rotation := baseResponse.Destination.Rotation
-	var aRotation  *config.Rotation
+	var aRotation *config.Rotation
 	if rotation != nil {
 		aRotation = &config.Rotation{
 			EveryMs:    rotation.EveryMs,
 			MaxEntries: rotation.MaxEntries,
-			URL:        m.ReplaceKeyName(rotation.URL,key),
+			URL:        m.ReplaceKeyName(rotation.URL, key),
 			Codec:      rotation.Codec,
 			Emit:       rotation.Emit,
 		}
@@ -63,16 +63,14 @@ func (m *MultiLogger) Get(key string) (*log.Logger, error) {
 	return logger, nil
 }
 
-func (m *MultiLogger) ReplaceKeyName( URL string,key string) string {
+func (m *MultiLogger) ReplaceKeyName(URL string, key string) string {
 	if count := strings.Count(URL, m.keyName); count > 0 {
 		URL = strings.Replace(URL, m.keyName, key, count)
 	}
 	return URL
 }
 
-
-
-//Close closes all loggers
+// Stop closes all loggers
 func (m *MultiLogger) Close() (err error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
@@ -84,13 +82,13 @@ func (m *MultiLogger) Close() (err error) {
 	return err
 }
 
-//DataLoggerKey data logger key
+// DataLoggerKey data logger key
 type dataMultiLoggerKey string
 
-//DataLoggerKey data logger context key
+// DataLoggerKey data logger context key
 const DataMultiLoggerKey = dataMultiLoggerKey("dataMultiLogger")
 
-//NewDataMultiLogger creates a data multi logger
+// NewDataMultiLogger creates a data multi logger
 func NewDataMultiLogger(ctx context.Context, keyName string, reporter processor.Reporter) (context.Context, error) {
 	result := &MultiLogger{
 		keyName:  keyName,
