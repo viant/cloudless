@@ -32,6 +32,9 @@ func (s *Service) Sync(ctx context.Context, sync *Synchronization) error {
 	if err != nil {
 		return fmt.Errorf("failed to open %v, %w", sync.URL(), err)
 	}
+	if reader == nil {
+		return fmt.Errorf("failed to open %v due to nil reader", sync.URL())
+	}
 	defer reader.Close()
 
 	if sync.Type == nil {
