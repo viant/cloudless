@@ -43,6 +43,7 @@ type (
 		MetricPort          int    //if specified HTTP endpoint port to expose metrics
 		RowTypeName         string // parquet/json row type
 		OnMirrorURL         string //OnMirror represents copy url of the resource
+		QuorumExt           string
 	}
 )
 
@@ -103,7 +104,7 @@ func (c Config) LoaderDeadline(ctx context.Context) time.Time {
 	return c.Deadline(ctx).Add(-time.Millisecond * time.Duration(c.LoaderDeadlineLagMs))
 }
 
-//Validate checks if Config is valid
+// Validate checks if Config is valid
 func (c *Config) Validate() error {
 	if c.RetryURL == "" {
 		return errors.New("retryURL was empty")
@@ -120,7 +121,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-//InitWithNoLimit intialise config with no execution limit
+// InitWithNoLimit intialise config with no execution limit
 func (c *Config) InitWithNoLimit() {
 	c.RetryURL = "mem://localhost/retry"
 	c.FailedURL = "mem://localhost/failed"
@@ -128,7 +129,7 @@ func (c *Config) InitWithNoLimit() {
 	c.MaxExecTimeMs = math.MaxInt32
 }
 
-//Init sets default Config values
+// Init sets default Config values
 func (c *Config) Init(ctx context.Context, fs afs.Service) error {
 	if c.MaxExecTimeMs == 0 {
 		c.MaxExecTimeMs = 9 * 60000 //9 min

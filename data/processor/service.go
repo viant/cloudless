@@ -8,11 +8,15 @@ import (
 	"github.com/francoispqt/gojay"
 	"github.com/vc42/parquet-go"
 	"github.com/viant/afs"
+	"github.com/viant/afs/file"
+	"github.com/viant/afs/storage"
 	"github.com/viant/afs/url"
+	"github.com/viant/cloudless/ioutil"
 	"github.com/viant/gmetric"
 	"github.com/viant/toolbox"
 	"io"
 	"net/http"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -21,7 +25,7 @@ import (
 	"time"
 )
 
-//Service represents processing service
+// Service represents processing service
 type Service struct {
 	Config  *Config
 	Metrics *gmetric.Service
@@ -30,7 +34,7 @@ type Service struct {
 	reporterProvider func() Reporter
 }
 
-//Do starts service processing
+// Do starts service processing
 func (s *Service) Do(ctx context.Context, request *Request) Reporter {
 	reporter := s.reporterProvider()
 	response := reporter.BaseResponse()
@@ -49,10 +53,20 @@ func (s *Service) Do(ctx context.Context, request *Request) Reporter {
 	response.SourceURL = request.SourceURL
 	response.StartTime = request.StartTime
 	var err error
-	err = s.onMirror(context.Background(),request)
+	err = s.onMirror(context.Background(), request)
 	if err != nil {
 		response.LogError(err)
 	}
+
+	if s.Config.QuorumExt != "" {
+		if notInQuorum, err := s.handleQuorumFlow(ctx, request, response); notInQuorum || err != nil {
+			if err != nil {
+				response.LogError(err)
+			}
+			return reporter
+		}
+	}
+
 	if request.SourceType == Parquet {
 		err = s.do(ctx, request, reporter, s.loadParquetData)
 	} else { // CSV and JSON
@@ -66,6 +80,77 @@ func (s *Service) Do(ctx context.Context, request *Request) Reporter {
 		response.LogError(err)
 	}
 	return reporter
+}
+
+func (s *Service) handleQuorumFlow(ctx context.Context, request *Request, response *Response) (bool, error) {
+	ext := path.Ext(request.SourceURL)
+	hasQuorum := strings.Contains(ext, s.Config.QuorumExt)
+	if !hasQuorum {
+		response.Status = "QuorumSkipped"
+		return true, nil
+	}
+	if request.ReadCloser != nil {
+		request.ReadCloser.Close()
+	}
+	parent, _ := url.Split(request.SourceURL, file.Scheme)
+	objects, err := s.fs.List(ctx, parent)
+	if err != nil {
+		return true, err
+	}
+	toDelete, err := s.mergeFiles(ctx, request, objects)
+	if err != nil {
+		return false, err
+	}
+	for _, URL := range toDelete { //delete files that are now part of quorum
+		_ = s.fs.Delete(ctx, URL)
+	}
+	response.SourceURL = request.SourceURL
+	request.ReadCloser, err = s.fs.OpenURL(ctx, request.SourceURL)
+	return false, err
+}
+
+func (s *Service) mergeFiles(ctx context.Context, request *Request, objects []storage.Object) ([]string, error) {
+	mergedFileURL := strings.Replace(request.SourceURL, s.Config.QuorumExt, "", 1)
+	request.SourceURL = mergedFileURL
+	writer, err := s.fs.NewWriter(ctx, mergedFileURL, file.DefaultFileOsMode)
+	if err != nil {
+		return nil, err
+	}
+	var toDelete = []string{request.SourceURL}
+	for _, object := range objects {
+		if object.IsDir() || strings.HasSuffix(object.Name(), s.Config.QuorumExt) {
+			continue
+		}
+		if err = s.mergeFile(ctx, object, writer); err != nil {
+			return nil, err
+		}
+		toDelete = append(toDelete, object.URL())
+
+	}
+	if err = writer.Close(); err != nil {
+		return nil, err
+	}
+	return toDelete, err
+}
+
+func (s *Service) mergeFile(ctx context.Context, object storage.Object, writer io.WriteCloser) error {
+	reader, err := s.fs.OpenURL(ctx, object.URL())
+	if err != nil {
+		return err
+	}
+	dataReader, err := ioutil.DataReader(reader, object.URL())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = dataReader.Close()
+		_ = reader.Close()
+	}()
+	_, err = io.Copy(writer, reader)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
@@ -484,7 +569,7 @@ func (s *Service) onMirror(ctx context.Context, request *Request) error {
 	}
 	urlPath := url.Path(request.SourceURL)
 	mirrorURL := url.Join(s.Config.OnMirrorURL, urlPath)
-	return s.fs.Copy(ctx,request.SourceURL, mirrorURL)
+	return s.fs.Copy(ctx, request.SourceURL, mirrorURL)
 }
 
 func (s *Service) sortInput(reader io.Reader, response *Response) (io.Reader, error) {
