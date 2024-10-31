@@ -111,12 +111,13 @@ func (s *Service) handleQuorumFlow(ctx context.Context, request *Request, respon
 
 func (s *Service) mergeFiles(ctx context.Context, request *Request, objects []storage.Object) ([]string, error) {
 	mergedFileURL := strings.Replace(request.SourceURL, s.Config.QuorumExt, "", 1)
+	var toDelete = []string{request.SourceURL}
 	request.SourceURL = mergedFileURL
 	writer, err := s.fs.NewWriter(ctx, mergedFileURL, file.DefaultFileOsMode)
 	if err != nil {
 		return nil, err
 	}
-	var toDelete = []string{request.SourceURL}
+
 	for _, object := range objects {
 		if object.IsDir() || strings.HasSuffix(object.Name(), s.Config.QuorumExt) {
 			continue
@@ -146,7 +147,7 @@ func (s *Service) mergeFile(ctx context.Context, object storage.Object, writer i
 		_ = dataReader.Close()
 		_ = reader.Close()
 	}()
-	_, err = io.Copy(writer, reader)
+	_, err = io.Copy(writer, dataReader)
 	if err != nil {
 		return err
 	}
