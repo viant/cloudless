@@ -21,6 +21,7 @@ type (
 		Matched         []int
 		ExactChildren   []*Node
 		WildcardMatcher *Node
+		StarMatcher     *Node // Handles "*" wildcards that match multiple segments
 		urlIndex        map[string]int
 		positionIndex   map[int]bool
 		suffix          bool
@@ -43,12 +44,22 @@ func (n *Node) Add(routeIndex int, uri string) {
 
 	segment, remaining := extractSegment(uri)
 	var child *Node
-	if len(segment) > 0 && segment[0] == '*' {
-		child = n.getWildcardMatcher()
+
+	if segment == "*" {
+		// "*" wildcard that matches everything below this path
+		child = n.getStarMatcher()
 		child.suffix = true
+		// For wildcard star, we add the route at this level
+		if !child.positionIndex[routeIndex] {
+			child.Matched = append(child.Matched, routeIndex)
+			child.positionIndex[routeIndex] = true
+		}
+		return
 	} else if len(segment) > 0 && segment[0] == '{' {
+		// Parameter wildcard like {id}
 		child = n.getWildcardMatcher()
 	} else {
+		// Normal path segment
 		child = n.getChildOrCreate(segment)
 	}
 
@@ -81,30 +92,46 @@ func (n *Node) Match(method, route string, exact bool, dest *[]*Node) {
 
 	segment, path := extractSegment(route)
 
-	node, ok := n.nextMatcher(segment)
-	if ok {
-		if node.suffix {
-			*dest = append(*dest, node)
+	// Check for exact match first - prioritize exact matches over wildcards
+	if index, ok := n.urlIndex[segment]; ok {
+		node := n.ExactChildren[index]
+		if path == "" {
+			node.Match(method, path, exact, dest)
 			return
 		}
 		node.Match(method, path, exact, dest)
 		return
 	}
 
-	if n.WildcardMatcher == nil && len(n.ExactChildren) == 0 && !exact {
+	// Check for parameter wildcard
+	if n.WildcardMatcher != nil {
+		n.WildcardMatcher.Match(method, path, exact, dest)
+		return
+	}
+
+	// Check if we have a star matcher that matches everything
+	if n.StarMatcher != nil {
+		*dest = append(*dest, n.StarMatcher)
+		return
+	}
+
+	if !exact {
 		*dest = append(*dest, n)
 	}
 }
 
 func (n *Node) nextMatcher(segment string) (*Node, bool) {
+	// Check for exact match
 	index, ok := n.urlIndex[segment]
-	if !ok && n.WildcardMatcher != nil {
-		return n.WildcardMatcher, true
-	}
-
 	if ok {
 		return n.ExactChildren[index], true
 	}
+
+	// Check for wildcard match
+	if n.WildcardMatcher != nil {
+		return n.WildcardMatcher, true
+	}
+
 	return nil, false
 }
 
@@ -113,12 +140,17 @@ func (n *Node) getWildcardMatcher() *Node {
 		return n.WildcardMatcher
 	}
 
-	n.WildcardMatcher = &Node{
-		urlIndex:      map[string]int{},
-		positionIndex: map[int]bool{},
+	n.WildcardMatcher = NewNode()
+	return n.WildcardMatcher
+}
+
+func (n *Node) getStarMatcher() *Node {
+	if n.StarMatcher != nil {
+		return n.StarMatcher
 	}
 
-	return n.WildcardMatcher
+	n.StarMatcher = NewNode()
+	return n.StarMatcher
 }
 
 func extractSegment(uri string) (string, string) {
@@ -173,7 +205,6 @@ func (m *Matcher) init() {
 
 			allUriNodes := m.getOrCreateMatcher("")
 			allUriNodes.Add(i, uri)
-
 		}
 	}
 }
@@ -251,11 +282,33 @@ func (m *Matcher) MatchOne(namespace, URI string) (Matchable, error) {
 		return nil, m.unmatchedRouteErr(URI)
 	}
 
-	if len(match) > 1 || len(match[0].Matched) > 1 {
-		return nil, fmt.Errorf("matched more than one route for %v", URI)
+	// Prioritize exact matches
+	var exactMatch *Node
+	var otherMatches []*Node
+
+	for _, node := range match {
+		if !node.suffix && len(node.Matched) > 0 {
+			exactMatch = node
+			break
+		}
+		if len(node.Matched) > 0 {
+			otherMatches = append(otherMatches, node)
+		}
 	}
 
-	return m.Matchables[match[0].Matched[0]], nil
+	// Use exact match if found
+	if exactMatch != nil && len(exactMatch.Matched) > 0 {
+		return m.Matchables[exactMatch.Matched[0]], nil
+	}
+
+	// Otherwise use the first match with routes
+	for _, node := range otherMatches {
+		if len(node.Matched) > 0 {
+			return m.Matchables[node.Matched[0]], nil
+		}
+	}
+
+	return nil, fmt.Errorf("matched more than one route for %v", URI)
 }
 
 func (m *Matcher) MatchAll(namespace, URI string) []Matchable {
