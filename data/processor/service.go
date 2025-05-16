@@ -171,8 +171,9 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 		s.Config.Concurrency = 1
 	}
 	waitGroup := &sync.WaitGroup{}
-	waitGroup.Add(s.Config.Concurrency + 1)
-	stream := make(chan interface{}, s.Config.Concurrency+1)
+	consumers := 2*s.Config.Concurrency + 1
+	waitGroup.Add(consumers)
+	stream := make(chan interface{}, consumers)
 	defer s.closeWriters(response, retryWriter, corruptionWriter)
 	go load(ctx, waitGroup, request, stream, response, retryWriter)
 	var timeout = make(chan bool)
