@@ -427,51 +427,121 @@ func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, reque
 	//	response.Loaded++
 	//}
 
-	//deadline := s.Config.LoaderDeadline(ctx)
-	bufReader := bufio.NewReaderSize(reader, 1*1024*1024 /*64*1024*/) // 64 KB buffer
+	////deadline := s.Config.LoaderDeadline(ctx)
+	//bufReader := bufio.NewReaderSize(reader, 1*1024*1024 /*64*1024*/) // 64 KB buffer
+	//
+	//for {
+	//	if ctx.Err() != nil || time.Now().After(deadline) {
+	//		break
+	//	}
+	//
+	//	line, err := bufReader.ReadBytes('\n')
+	//	if err != nil {
+	//		if err != io.EOF {
+	//			response.LogError(err)
+	//		}
+	//		break
+	//	}
+	//
+	//	line = bytes.TrimSpace(line)         // optional
+	//	data := append([]byte(nil), line...) // safe copy
+	//
+	//	if time.Now().After(deadline) {
+	//		s.writeToRetry(retryWriter, data, response)
+	//		response.LoadTimeouts++
+	//		continue
+	//	}
+	//
+	//	var item interface{} = data
+	//	if request.SourceType == JSON && request.RowType != nil {
+	//		rowPtr := reflect.New(request.RowType).Interface()
+	//		if err := gojay.Unmarshal(data, rowPtr); err != nil {
+	//			response.LogError(err)
+	//			continue
+	//		}
+	//		item = rowPtr
+	//	}
+	//
+	//	select {
+	//	case stream <- item:
+	//	case <-ctx.Done():
+	//		response.LogError(newProcessError("loader context canceled"))
+	//		return
+	//	}
+	//
+	//	response.Loaded++
+	//}
 
-	for {
-		if ctx.Err() != nil || time.Now().After(deadline) {
-			break
-		}
+	//////////
+	//	defer wg.Done()
+	//	defer close(stream)
 
-		line, err := bufReader.ReadBytes('\n')
-		if err != nil {
-			if err != io.EOF {
-				response.LogError(err)
+	//reader = bufio.NewReaderSize(request.ReadCloser, 64*1024)
+
+	reader2 := bufio.NewReaderSize(reader, 1*1024*1024 /*64*1024*/) // 64 KB buffer
+
+	deadline = s.Config.LoaderDeadline(ctx)
+
+	// channel between reader and workers
+	lineChan := make(chan []byte, s.Config.Concurrency*2)
+
+	// Stage 1: reader goroutine
+	go func() {
+		defer close(lineChan)
+		for {
+			line, err := reader2.ReadBytes('\n')
+			if err != nil {
+				if err != io.EOF {
+					response.LogError(err)
+				}
+				break
 			}
-			break
-		}
+			data := append([]byte(nil), bytes.TrimSpace(line)...)
 
-		line = bytes.TrimSpace(line)         // optional
-		data := append([]byte(nil), line...) // safe copy
-
-		if time.Now().After(deadline) {
-			s.writeToRetry(retryWriter, data, response)
-			response.LoadTimeouts++
-			continue
-		}
-
-		var item interface{} = data
-		if request.SourceType == JSON && request.RowType != nil {
-			rowPtr := reflect.New(request.RowType).Interface()
-			if err := gojay.Unmarshal(data, rowPtr); err != nil {
-				response.LogError(err)
+			if time.Now().After(deadline) {
+				s.writeToRetry(retryWriter, data, response)
+				response.LoadTimeouts++
 				continue
 			}
-			item = rowPtr
+			select {
+			case lineChan <- data:
+			case <-ctx.Done():
+				return
+			}
 		}
+	}()
 
-		select {
-		case stream <- item:
-		case <-ctx.Done():
-			response.LogError(newProcessError("loader context canceled"))
-			return
-		}
+	// Stage 2: worker pool
+	workerCount := s.Config.Concurrency
+	var workerWG sync.WaitGroup
+	workerWG.Add(workerCount)
 
-		response.Loaded++
+	for i := 0; i < workerCount; i++ {
+		go func() {
+			defer workerWG.Done()
+			for data := range lineChan {
+				var item interface{} = data
+				if request.SourceType == JSON && request.RowType != nil {
+					rowPtr := reflect.New(request.RowType).Interface()
+					if err := gojay.Unmarshal(data, rowPtr); err != nil {
+						response.LogError(err)
+						continue
+					}
+					item = rowPtr
+				}
+
+				select {
+				case stream <- item:
+					atomic.AddInt32(&response.Loaded, 1)
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
 	}
 
+	// Wait for workers to finish
+	workerWG.Wait()
 }
 
 func (s *Service) runWorker(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer, timeout chan bool) {
