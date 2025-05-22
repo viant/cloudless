@@ -723,9 +723,10 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 	}
 
 	atomic.AddInt32(&response.Processed, processed)
-	timeTaken := time.Since(start)
+	finish := time.Now()
+	timeTaken := finish.Sub(start)
 
-	fmt.Printf("###worker done - processed %d items in %s QPS: %d \n", &processed, time.Since(start), float64(processed)/timeTaken.Seconds())
+	fmt.Printf("###worker done - start: %s finish: %s processed %d items in %s QPS: %d \n", start, finish, &processed, time.Since(start), float64(processed)/timeTaken.Seconds())
 }
 
 // ctx & deadline
