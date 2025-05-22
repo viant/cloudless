@@ -689,24 +689,21 @@ func logError(err error, response *Response, data interface{}, ctxErrLogged *boo
 // no ctx, actx/request 500
 func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer) {
 	response := reporter.BaseResponse()
-	n := 0
-	nptr := &n
-	defer func(x *int) { fmt.Printf("###worker done - processed %d items\n", *x) }(nptr)
 
 	defer wg.Done()
-	deadline := s.Config.Deadline(ctx)
+	//deadline := s.Config.Deadline(ctx)
 	var processed int32 = 0 //TODO
+	defer func(x *int32) { fmt.Printf("###worker done - processed %d items\n", *x) }(&processed)
+
+	ctx = context.Background()
 
 	for data := range stream {
-		if time.Now().After(deadline) {
-			s.retryWriter2(ctx, data, retryWriter, response)
-			continue
-		}
+		//if time.Now().After(deadline) {
+		//	s.retryWriter2(ctx, data, retryWriter, response)
+		//	continue
+		//}
 
-		aCtx, cancel := context.WithTimeout(ctx, time.Millisecond*500)
-		err := s.Process(aCtx, data, reporter)
-		cancel()
-
+		err := s.Process(ctx, data, reporter)
 		if err != nil {
 
 			switch actual := err.(type) {
