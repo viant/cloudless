@@ -180,7 +180,7 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 	//fmt.Printf("!!!!!@@@%s!!!!!@@@\n", s.Config.Mode)
 	switch s.Config.Mode {
 	case SafeCtxMode:
-		//time.Sleep(30 * time.Second)
+		//time.Sleep(20 * time.Second)
 		if _, ok := ctx.Deadline(); !ok {
 			deadline := s.Config.Deadline(ctx)
 			var cancel context.CancelFunc
@@ -258,7 +258,7 @@ func (s *Service) loadParquetData(ctx context.Context, waitGroup *sync.WaitGroup
 	}
 }
 
-func (s *Service) loadDataLegacy(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer) {
+func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer) {
 	defer waitGroup.Done()
 	defer close(stream)
 	var reader io.Reader = request.ReadCloser
@@ -287,7 +287,18 @@ func (s *Service) loadDataLegacy(ctx context.Context, waitGroup *sync.WaitGroup,
 		return
 	}
 
-	for scanner.Scan() {
+	scanDuration := time.Duration(0)
+
+	//for scanner.Scan() {
+	for {
+		start := time.Now()
+		ok := scanner.Scan()
+		scanDuration += time.Since(start)
+
+		if !ok {
+			break
+		}
+
 		bs := scanner.Bytes()
 		data := make([]byte, len(bs))
 		copy(data, bs)
@@ -308,6 +319,9 @@ func (s *Service) loadDataLegacy(ctx context.Context, waitGroup *sync.WaitGroup,
 		}
 		response.Loaded++
 	}
+
+	fmt.Printf("Scanner scan duration: %v\n", scanDuration)
+
 }
 
 func (s *Service) loadData2(
@@ -376,7 +390,7 @@ func (s *Service) loadData2(
 	}
 }
 
-func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer) {
+func (s *Service) loadData3(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer) {
 	defer waitGroup.Done()
 	defer close(stream)
 	var reader io.Reader = request.ReadCloser
