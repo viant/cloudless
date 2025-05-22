@@ -693,7 +693,7 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 	defer wg.Done()
 	//deadline := s.Config.Deadline(ctx)
 	var processed int32 = 0 //TODO
-	defer func(x *int32) { fmt.Printf("###worker done - processed %d items\n", *x) }(&processed)
+	start := time.Now()
 
 	ctx = context.Background()
 
@@ -723,7 +723,9 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 	}
 
 	atomic.AddInt32(&response.Processed, processed)
+	timeTaken := time.Since(start)
 
+	fmt.Printf("###worker done - processed %d items in %s QPS: %d \n", &processed, time.Since(start), float64(processed)/timeTaken.Seconds())
 }
 
 // ctx & deadline
