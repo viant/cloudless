@@ -180,6 +180,7 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 	//fmt.Printf("!!!!!@@@%s!!!!!@@@\n", s.Config.Mode)
 	switch s.Config.Mode {
 	case SafeCtxMode:
+		time.Sleep(30 * time.Second)
 		if _, ok := ctx.Deadline(); !ok {
 			deadline := s.Config.Deadline(ctx)
 			var cancel context.CancelFunc
