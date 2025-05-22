@@ -635,6 +635,7 @@ func (s *Service) runWorkerInSafeCtxMode(ctx context.Context, wg *sync.WaitGroup
 	defer wg.Done()
 	response := reporter.BaseResponse()
 	ctxErrLogged := false
+	var processed int32 = 0 //TODO
 
 	for data := range stream {
 		if err := ctx.Err(); err != nil {
@@ -660,9 +661,12 @@ func (s *Service) runWorkerInSafeCtxMode(ctx context.Context, wg *sync.WaitGroup
 				s.retryWriter(data, retryWriter, response)
 			}
 		} else {
-			atomic.AddInt32(&response.Processed, 1)
+			processed++
 		}
 	}
+
+	atomic.AddInt32(&response.Processed, processed)
+
 }
 
 func logError(err error, response *Response, data interface{}, ctxErrLogged *bool) {
@@ -691,6 +695,7 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 
 	defer wg.Done()
 	deadline := s.Config.Deadline(ctx)
+	var processed int32 = 0 //TODO
 
 	for data := range stream {
 		if time.Now().After(deadline) {
@@ -716,9 +721,12 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 				s.retryWriter(data, retryWriter, response)
 			}
 		} else {
-			atomic.AddInt32(&response.Processed, 1)
+			processed++
 		}
 	}
+
+	atomic.AddInt32(&response.Processed, processed)
+
 }
 
 // ctx & deadline
@@ -727,6 +735,7 @@ func (s *Service) runWorker2(ctx context.Context, wg *sync.WaitGroup, stream cha
 	response := reporter.BaseResponse()
 	ctxErrLogged := false
 	deadline := s.Config.Deadline(ctx) // !
+	var processed int32 = 0            //TODO
 
 	for data := range stream {
 		if time.Now().After(deadline) {
@@ -753,9 +762,12 @@ func (s *Service) runWorker2(ctx context.Context, wg *sync.WaitGroup, stream cha
 				s.retryWriter(data, retryWriter, response)
 			}
 		} else {
-			atomic.AddInt32(&response.Processed, 1)
+			processed++
 		}
 	}
+
+	atomic.AddInt32(&response.Processed, processed)
+
 }
 
 // actx per worker, not iter check
@@ -766,6 +778,7 @@ func (s *Service) runWorker3(ctx context.Context, wg *sync.WaitGroup, stream cha
 	deadline := s.Config.Deadline(ctx)
 	aCtx, cancel := context.WithTimeout(ctx, time.Until(deadline))
 	defer cancel()
+	var processed int32 = 0 //TODO
 
 	for data := range stream {
 
@@ -784,9 +797,12 @@ func (s *Service) runWorker3(ctx context.Context, wg *sync.WaitGroup, stream cha
 				s.retryWriter(data, retryWriter, response)
 			}
 		} else {
-			atomic.AddInt32(&response.Processed, 1)
+			processed++
 		}
 	}
+
+	atomic.AddInt32(&response.Processed, processed)
+
 }
 
 // actx per worker, actx iter check
@@ -797,6 +813,7 @@ func (s *Service) runWorker4(ctx context.Context, wg *sync.WaitGroup, stream cha
 	deadline := s.Config.Deadline(ctx)
 	aCtx, cancel := context.WithTimeout(ctx, time.Until(deadline))
 	defer cancel()
+	var processed int32 = 0 //TODO
 
 	for data := range stream {
 		if err := ctx.Err(); err != nil {
@@ -822,9 +839,12 @@ func (s *Service) runWorker4(ctx context.Context, wg *sync.WaitGroup, stream cha
 				s.retryWriter(data, retryWriter, response)
 			}
 		} else {
-			atomic.AddInt32(&response.Processed, 1)
+			processed++
 		}
 	}
+
+	atomic.AddInt32(&response.Processed, processed)
+
 }
 
 // actx per worker, deadline iter check
@@ -835,6 +855,7 @@ func (s *Service) runWorker5(ctx context.Context, wg *sync.WaitGroup, stream cha
 	deadline := s.Config.Deadline(ctx)
 	aCtx, cancel := context.WithTimeout(ctx, time.Until(deadline))
 	defer cancel()
+	var processed int32 = 0 //TODO
 
 	for data := range stream {
 		if time.Now().After(deadline) {
@@ -861,7 +882,10 @@ func (s *Service) runWorker5(ctx context.Context, wg *sync.WaitGroup, stream cha
 				s.retryWriter(data, retryWriter, response)
 			}
 		} else {
-			atomic.AddInt32(&response.Processed, 1)
+			processed++
 		}
 	}
+
+	atomic.AddInt32(&response.Processed, processed)
+
 }
