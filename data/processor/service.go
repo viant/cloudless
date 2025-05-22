@@ -189,6 +189,8 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 
 		fmt.Printf("###$$$ s.Config.TestCaseNr == %v\n", s.Config.TestCaseNr)
 
+		fmt.Printf("###$$$ s.Config.Concurrency == %v\n", s.Config.Concurrency)
+
 		for i := 0; i < s.Config.Concurrency; i++ {
 			switch s.Config.TestCaseNr {
 			case 1:
@@ -693,6 +695,7 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 	defer wg.Done()
 	//deadline := s.Config.Deadline(ctx)
 	var processed int32 = 0 //TODO
+	var processed64 int64 = 0
 	start := time.Now()
 
 	ctx = context.Background()
@@ -718,15 +721,17 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 				s.retryWriter(data, retryWriter, response)
 			}
 		} else {
-			processed++
+			processed++ //TODO int64 + flushing
+			processed64++
 		}
 	}
 
 	atomic.AddInt32(&response.Processed, processed)
 	finish := time.Now()
 	timeTaken := finish.Sub(start)
+	qps := float64(processed) / timeTaken.Seconds()
 
-	fmt.Printf("###worker done - start: %s finish: %s processed %d items in %s QPS: %d \n", start, finish, &processed, time.Since(start), float64(processed)/timeTaken.Seconds())
+	fmt.Printf("###worker done - start: %s finish: %s processed %d items in %s QPS: %d \n", start, finish, processed, time.Since(start), qps)
 }
 
 // ctx & deadline
