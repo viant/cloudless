@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/francoispqt/gojay"
 	"github.com/vc42/parquet-go"
@@ -171,17 +172,48 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 		s.Config.Concurrency = 1
 	}
 	waitGroup := &sync.WaitGroup{}
-	consumers := s.Config.Concurrency + 1
-	waitGroup.Add(consumers)
-	stream := make(chan interface{}, consumers)
+	streamSize := 100*s.Config.Concurrency + 1
+	waitGroup.Add(s.Config.Concurrency + 1)
+	stream := make(chan interface{}, streamSize)
 	defer s.closeWriters(response, retryWriter, corruptionWriter)
 	go load(ctx, waitGroup, request, stream, response, retryWriter)
-	var timeout = make(chan bool)
+	//fmt.Printf("!!!!!@@@%s!!!!!@@@\n", s.Config.Mode)
+	switch s.Config.Mode {
+	case SafeCtxMode:
+		if _, ok := ctx.Deadline(); !ok {
+			deadline := s.Config.Deadline(ctx)
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, time.Until(deadline))
+			defer cancel()
+		}
 
-	go s.setTimeoutChannel(ctx, timeout)
-	for i := 0; i < s.Config.Concurrency; i++ {
-		go s.runWorker(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter, timeout)
+		fmt.Printf("###$$$ s.Config.TestCaseNr == %v\n", s.Config.TestCaseNr)
+
+		for i := 0; i < s.Config.Concurrency; i++ {
+			switch s.Config.TestCaseNr {
+			case 1:
+				go s.runWorker1(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter) // 512 - QPS ~1533
+			case 2:
+				go s.runWorker2(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter)
+			case 3:
+				go s.runWorker3(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter)
+			case 4:
+				go s.runWorker4(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter)
+			case 5:
+				go s.runWorker5(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter)
+			default:
+				go s.runWorkerInSafeCtxMode(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter)
+			}
+		}
+	default:
+		var timeout = make(chan bool)
+
+		go s.setTimeoutChannel(ctx, timeout)
+		for i := 0; i < s.Config.Concurrency; i++ {
+			go s.runWorker(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter, timeout)
+		}
 	}
+
 	waitGroup.Wait()
 
 	if postProcess, ok := s.Processor.(PostProcessor); ok {
@@ -595,5 +627,241 @@ func NewWithMetrics(config *Config, fs afs.Service, processor Processor, reporte
 		fs:               fs,
 		Processor:        processor,
 		reporterProvider: reporterProvider,
+	}
+}
+
+// only ctx
+func (s *Service) runWorkerInSafeCtxMode(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer) {
+	defer wg.Done()
+	response := reporter.BaseResponse()
+	ctxErrLogged := false
+
+	for data := range stream {
+		if err := ctx.Err(); err != nil {
+			s.retryWriter2(ctx, data, retryWriter, response)
+			if !ctxErrLogged {
+				logError(err, response, data, &ctxErrLogged)
+			}
+			continue
+		}
+
+		err := s.Process(ctx, data, reporter)
+
+		if err != nil {
+			switch actual := err.(type) {
+			case *DataCorruption:
+				response.LogError(err)
+				s.corruptionWriter(data, corruptionWriter, response)
+			case *PartialRetry:
+				s.partialRetryWriter(actual, data, response, retryWriter)
+				response.LogError(newProcessError(fmt.Sprintf("failed to process data due to %+v,  %+v", actual, data)))
+			default:
+				logError(err, response, data, &ctxErrLogged)
+				s.retryWriter(data, retryWriter, response)
+			}
+		} else {
+			atomic.AddInt32(&response.Processed, 1)
+		}
+	}
+}
+
+func logError(err error, response *Response, data interface{}, ctxErrLogged *bool) {
+	if err == nil {
+		return
+	}
+
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		response.LogError(newProcessError(fmt.Sprintf("deadline exceeded while processing %+v", data)))
+		*ctxErrLogged = true
+	case errors.Is(err, context.Canceled):
+		response.LogError(newProcessError(fmt.Sprintf("context canceled while processing %+v", data)))
+		*ctxErrLogged = true
+	default:
+		response.LogError(newProcessError(fmt.Sprintf("failed to process data due to %v, %+v", err, data)))
+	}
+}
+
+// no ctx, actx/request 500
+func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer) {
+	response := reporter.BaseResponse()
+	n := 0
+	nptr := &n
+	defer func(x *int) { fmt.Printf("###worker done - processed %d items\n", *x) }(nptr)
+
+	defer wg.Done()
+	deadline := s.Config.Deadline(ctx)
+
+	for data := range stream {
+		if time.Now().After(deadline) {
+			s.retryWriter2(ctx, data, retryWriter, response)
+			continue
+		}
+
+		aCtx, cancel := context.WithTimeout(ctx, time.Millisecond*500)
+		err := s.Process(aCtx, data, reporter)
+		cancel()
+
+		if err != nil {
+
+			switch actual := err.(type) {
+			case *DataCorruption:
+				response.LogError(err)
+				s.corruptionWriter(data, corruptionWriter, response)
+			case *PartialRetry:
+				s.partialRetryWriter(actual, data, response, retryWriter)
+				response.LogError(newProcessError(fmt.Sprintf("failed to process data due to %+v,  %+v", actual, data)))
+			default:
+				response.LogError(newProcessError(fmt.Sprintf(" failed to process data due to %v, %+v", err, data)))
+				s.retryWriter(data, retryWriter, response)
+			}
+		} else {
+			atomic.AddInt32(&response.Processed, 1)
+		}
+	}
+}
+
+// ctx & deadline
+func (s *Service) runWorker2(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer) {
+	defer wg.Done()
+	response := reporter.BaseResponse()
+	ctxErrLogged := false
+	deadline := s.Config.Deadline(ctx) // !
+
+	for data := range stream {
+		if time.Now().After(deadline) {
+			s.retryWriter2(ctx, data, retryWriter, response)
+			if !ctxErrLogged {
+				err := fmt.Errorf("deadline exceeded while processing %+v", data)
+				logError(err, response, data, &ctxErrLogged)
+			}
+			continue
+		}
+
+		err := s.Process(ctx, data, reporter)
+
+		if err != nil {
+			switch actual := err.(type) {
+			case *DataCorruption:
+				response.LogError(err)
+				s.corruptionWriter(data, corruptionWriter, response)
+			case *PartialRetry:
+				s.partialRetryWriter(actual, data, response, retryWriter)
+				response.LogError(newProcessError(fmt.Sprintf("failed to process data due to %+v,  %+v", actual, data)))
+			default:
+				logError(err, response, data, &ctxErrLogged)
+				s.retryWriter(data, retryWriter, response)
+			}
+		} else {
+			atomic.AddInt32(&response.Processed, 1)
+		}
+	}
+}
+
+// actx per worker, not iter check
+func (s *Service) runWorker3(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer) {
+	defer wg.Done()
+	response := reporter.BaseResponse()
+	ctxErrLogged := false
+	deadline := s.Config.Deadline(ctx)
+	aCtx, cancel := context.WithTimeout(ctx, time.Until(deadline))
+	defer cancel()
+
+	for data := range stream {
+
+		err := s.Process(aCtx, data, reporter)
+
+		if err != nil {
+			switch actual := err.(type) {
+			case *DataCorruption:
+				response.LogError(err)
+				s.corruptionWriter(data, corruptionWriter, response)
+			case *PartialRetry:
+				s.partialRetryWriter(actual, data, response, retryWriter)
+				response.LogError(newProcessError(fmt.Sprintf("failed to process data due to %+v,  %+v", actual, data)))
+			default:
+				logError(err, response, data, &ctxErrLogged)
+				s.retryWriter(data, retryWriter, response)
+			}
+		} else {
+			atomic.AddInt32(&response.Processed, 1)
+		}
+	}
+}
+
+// actx per worker, actx iter check
+func (s *Service) runWorker4(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer) {
+	defer wg.Done()
+	response := reporter.BaseResponse()
+	ctxErrLogged := false
+	deadline := s.Config.Deadline(ctx)
+	aCtx, cancel := context.WithTimeout(ctx, time.Until(deadline))
+	defer cancel()
+
+	for data := range stream {
+		if err := ctx.Err(); err != nil {
+			s.retryWriter2(ctx, data, retryWriter, response)
+			if !ctxErrLogged {
+				logError(err, response, data, &ctxErrLogged)
+			}
+			continue
+		}
+
+		err := s.Process(aCtx, data, reporter)
+
+		if err != nil {
+			switch actual := err.(type) {
+			case *DataCorruption:
+				response.LogError(err)
+				s.corruptionWriter(data, corruptionWriter, response)
+			case *PartialRetry:
+				s.partialRetryWriter(actual, data, response, retryWriter)
+				response.LogError(newProcessError(fmt.Sprintf("failed to process data due to %+v,  %+v", actual, data)))
+			default:
+				logError(err, response, data, &ctxErrLogged)
+				s.retryWriter(data, retryWriter, response)
+			}
+		} else {
+			atomic.AddInt32(&response.Processed, 1)
+		}
+	}
+}
+
+// actx per worker, deadline iter check
+func (s *Service) runWorker5(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer) {
+	defer wg.Done()
+	response := reporter.BaseResponse()
+	ctxErrLogged := false
+	deadline := s.Config.Deadline(ctx)
+	aCtx, cancel := context.WithTimeout(ctx, time.Until(deadline))
+	defer cancel()
+
+	for data := range stream {
+		if time.Now().After(deadline) {
+			s.retryWriter2(ctx, data, retryWriter, response)
+			if !ctxErrLogged {
+				err := fmt.Errorf("deadline exceeded while processing %+v", data)
+				logError(err, response, data, &ctxErrLogged)
+			}
+			continue
+		}
+
+		err := s.Process(aCtx, data, reporter)
+
+		if err != nil {
+			switch actual := err.(type) {
+			case *DataCorruption:
+				response.LogError(err)
+				s.corruptionWriter(data, corruptionWriter, response)
+			case *PartialRetry:
+				s.partialRetryWriter(actual, data, response, retryWriter)
+				response.LogError(newProcessError(fmt.Sprintf("failed to process data due to %+v,  %+v", actual, data)))
+			default:
+				logError(err, response, data, &ctxErrLogged)
+				s.retryWriter(data, retryWriter, response)
+			}
+		} else {
+			atomic.AddInt32(&response.Processed, 1)
+		}
 	}
 }

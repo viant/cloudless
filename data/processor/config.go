@@ -18,6 +18,11 @@ const (
 	OnDoneDelete = "delete"
 	//OnDoneMove move action
 	OnDoneMove = "move"
+
+	// SafeCtxMode uses workers that rely solely on context timeouts.
+	// It ensures all workers stop cooperatively via context cancellation,
+	// but does not guarantee hard interruption when the deadline is reached.
+	SafeCtxMode = "SafeCtx"
 )
 
 // Config represents processor configuration
@@ -44,6 +49,8 @@ type (
 		RowTypeName         string // parquet/json row type
 		OnMirrorURL         string //OnMirror represents copy url of the resource
 		QuorumExt           string
+		Mode                string
+		TestCaseNr          int
 	}
 )
 
