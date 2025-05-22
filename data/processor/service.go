@@ -172,7 +172,7 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 		s.Config.Concurrency = 1
 	}
 	waitGroup := &sync.WaitGroup{}
-	streamSize := 100*s.Config.Concurrency + 1
+	streamSize := 10000*s.Config.Concurrency + 1
 	waitGroup.Add(s.Config.Concurrency + 1)
 	stream := make(chan interface{}, streamSize)
 	defer s.closeWriters(response, retryWriter, corruptionWriter)
