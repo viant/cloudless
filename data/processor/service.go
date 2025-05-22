@@ -180,7 +180,7 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 	//fmt.Printf("!!!!!@@@%s!!!!!@@@\n", s.Config.Mode)
 	switch s.Config.Mode {
 	case SafeCtxMode:
-		time.Sleep(30 * time.Second)
+		//time.Sleep(30 * time.Second)
 		if _, ok := ctx.Deadline(); !ok {
 			deadline := s.Config.Deadline(ctx)
 			var cancel context.CancelFunc
@@ -258,7 +258,7 @@ func (s *Service) loadParquetData(ctx context.Context, waitGroup *sync.WaitGroup
 	}
 }
 
-func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer) {
+func (s *Service) loadDataLegacy(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer) {
 	defer waitGroup.Done()
 	defer close(stream)
 	var reader io.Reader = request.ReadCloser
@@ -308,6 +308,170 @@ func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, reque
 		}
 		response.Loaded++
 	}
+}
+
+func (s *Service) loadData2(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	req *Request,
+	stream chan interface{},
+	resp *Response,
+	retryWriter *Writer,
+) {
+	defer wg.Done()
+	defer close(stream)
+
+	var reader io.Reader = req.ReadCloser
+	if len(s.Config.Sort.By) > 0 {
+		var err error
+		if reader, err = s.sortInput(reader, resp); err != nil {
+			resp.LogError(err)
+			return
+		}
+	}
+
+	deadline := s.Config.LoaderDeadline(ctx)
+	bufReader := bufio.NewReaderSize(reader, 64*1024) // 64 KB buffer
+
+	for {
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			break
+		}
+
+		line, err := bufReader.ReadBytes('\n')
+		if err != nil {
+			if err != io.EOF {
+				resp.LogError(err)
+			}
+			break
+		}
+
+		line = bytes.TrimSpace(line)         // optional
+		data := append([]byte(nil), line...) // safe copy
+
+		if time.Now().After(deadline) {
+			s.writeToRetry(retryWriter, data, resp)
+			resp.LoadTimeouts++
+			continue
+		}
+
+		var item interface{} = data
+		if req.SourceType == JSON && req.RowType != nil {
+			rowPtr := reflect.New(req.RowType).Interface()
+			if err := gojay.Unmarshal(data, rowPtr); err != nil {
+				resp.LogError(err)
+				continue
+			}
+			item = rowPtr
+		}
+
+		select {
+		case stream <- item:
+		case <-ctx.Done():
+			resp.LogError(newProcessError("loader context canceled"))
+			return
+		}
+
+		resp.Loaded++
+	}
+}
+
+func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, request *Request, stream chan interface{}, response *Response, retryWriter *Writer) {
+	defer waitGroup.Done()
+	defer close(stream)
+	var reader io.Reader = request.ReadCloser
+	if len(s.Config.Sort.By) > 0 {
+		var err error
+		if reader, err = s.sortInput(reader, response); err != nil {
+			response.LogError(err)
+		}
+	}
+	deadline := s.Config.LoaderDeadline(ctx)
+	scanner := bufio.NewScanner(reader)
+	s.Config.AdjustScannerBuffer(scanner)
+
+	defer func() {
+		if scanner.Err() != io.EOF {
+			response.LogError(scanner.Err())
+		}
+	}()
+
+	if request.SourceType == CSV && s.Config.Sort.Batch && len(s.Config.Sort.By) > 0 {
+		s.loadInGroups(ctx, scanner, deadline, retryWriter, response, stream)
+		return
+	}
+	if request.SourceType == CSV && s.Config.BatchSize > 0 {
+		s.loadInBatches(ctx, s.Config.BatchSize, scanner, deadline, retryWriter, response, stream)
+		return
+	}
+
+	//for scanner.Scan() {
+	//	bs := scanner.Bytes()
+	//	data := make([]byte, len(bs))
+	//	copy(data, bs)
+	//	if time.Now().After(deadline) {
+	//		s.writeToRetry(retryWriter, data, response)
+	//		response.LoadTimeouts++
+	//		continue
+	//	}
+	//	if request.SourceType == JSON && request.RowType != nil {
+	//		rowPtr := reflect.New(request.RowType).Interface()
+	//		if err := gojay.Unmarshal(data, rowPtr); err != nil {
+	//			response.LogError(err)
+	//			continue
+	//		}
+	//		stream <- rowPtr
+	//	} else {
+	//		stream <- data
+	//	}
+	//	response.Loaded++
+	//}
+
+	//deadline := s.Config.LoaderDeadline(ctx)
+	bufReader := bufio.NewReaderSize(reader, 1*1024*1024 /*64*1024*/) // 64 KB buffer
+
+	for {
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			break
+		}
+
+		line, err := bufReader.ReadBytes('\n')
+		if err != nil {
+			if err != io.EOF {
+				response.LogError(err)
+			}
+			break
+		}
+
+		line = bytes.TrimSpace(line)         // optional
+		data := append([]byte(nil), line...) // safe copy
+
+		if time.Now().After(deadline) {
+			s.writeToRetry(retryWriter, data, response)
+			response.LoadTimeouts++
+			continue
+		}
+
+		var item interface{} = data
+		if request.SourceType == JSON && request.RowType != nil {
+			rowPtr := reflect.New(request.RowType).Interface()
+			if err := gojay.Unmarshal(data, rowPtr); err != nil {
+				response.LogError(err)
+				continue
+			}
+			item = rowPtr
+		}
+
+		select {
+		case stream <- item:
+		case <-ctx.Done():
+			response.LogError(newProcessError("loader context canceled"))
+			return
+		}
+
+		response.Loaded++
+	}
+
 }
 
 func (s *Service) runWorker(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer, timeout chan bool) {
