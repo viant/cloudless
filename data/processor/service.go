@@ -179,13 +179,13 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 
 	go load(ctx, waitGroup, request, stream, response, retryWriter)
 	//fmt.Printf("!!!!!@@@%s!!!!!@@@\n", s.Config.Mode)
+	time.Sleep(35 * time.Second)
 
 	start1 := time.Now()
 	processed := make([]int32, s.Config.Concurrency)
 
 	switch s.Config.Mode {
 	case SafeCtxMode:
-		time.Sleep(35 * time.Second)
 		if _, ok := ctx.Deadline(); !ok {
 			deadline := s.Config.Deadline(ctx)
 			var cancel context.CancelFunc
