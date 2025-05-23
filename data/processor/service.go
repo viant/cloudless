@@ -960,7 +960,7 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 
 	defer wg.Done()
 	//deadline := s.Config.Deadline(ctx)
-	start := time.Now()
+	//start := time.Now()
 
 	ctx = context.Background()
 
@@ -990,11 +990,11 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 	}
 
 	atomic.AddInt32(&response.Processed, *processed)
-	finish := time.Now()
-	timeTaken := finish.Sub(start)
-	qps := float64(*processed) / timeTaken.Seconds()
+	//finish := time.Now()
+	//timeTaken := finish.Sub(start)
+	//qps := float64(*processed) / timeTaken.Seconds()
 
-	fmt.Printf("###worker done - start: %s finish: %s processed %d items in %s QPS: %d \n", start, finish, *processed, time.Since(start), qps)
+	// fmt.Printf("###worker done - start: %s finish: %s processed %d items in %s QPS: %d \n", start, finish, *processed, time.Since(start), qps)
 }
 
 // ctx & deadline
