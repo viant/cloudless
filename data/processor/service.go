@@ -176,8 +176,13 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 	waitGroup.Add(s.Config.Concurrency + 1)
 	stream := make(chan interface{}, streamSize)
 	defer s.closeWriters(response, retryWriter, corruptionWriter)
+
 	go load(ctx, waitGroup, request, stream, response, retryWriter)
 	//fmt.Printf("!!!!!@@@%s!!!!!@@@\n", s.Config.Mode)
+
+	start1 := time.Now()
+	processed := make([]int32, s.Config.Concurrency)
+
 	switch s.Config.Mode {
 	case SafeCtxMode:
 		time.Sleep(35 * time.Second)
@@ -189,13 +194,12 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 		}
 
 		fmt.Printf("AAA ###$$$ s.Config.TestCaseNr == %v\n", s.Config.TestCaseNr)
-
 		fmt.Printf("AAA ###$$$ s.Config.Concurrency == %v\n", s.Config.Concurrency)
 
 		for i := 0; i < s.Config.Concurrency; i++ {
 			switch s.Config.TestCaseNr {
 			case 1:
-				go s.runWorker1(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter) // 512 - QPS ~1533
+				go s.runWorker1(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter, &processed[i]) // 512 - QPS ~1533
 			case 2:
 				go s.runWorker2(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter)
 			case 3:
@@ -218,6 +222,15 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 	}
 
 	waitGroup.Wait()
+
+	proceesingDuration := time.Since(start1)
+	allCnt := 0
+	for _, cnt := range processed {
+		allCnt += int(cnt)
+	}
+
+	qps := float64(allCnt) / proceesingDuration.Seconds()
+	fmt.Printf("AAA ###$$$ AVG QPS: %v, allCnt: %v, proceesingDuration: %v\n", qps, allCnt, proceesingDuration)
 
 	if postProcess, ok := s.Processor.(PostProcessor); ok {
 		if err = postProcess.Post(ctx, reporter); err != nil {
@@ -942,13 +955,11 @@ func logError(err error, response *Response, data interface{}, ctxErrLogged *boo
 }
 
 // no ctx, actx/request 500
-func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer) {
+func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer, processed *int32) {
 	response := reporter.BaseResponse()
 
 	defer wg.Done()
 	//deadline := s.Config.Deadline(ctx)
-	var processed int32 = 0 //TODO
-	var processed64 int64 = 0
 	start := time.Now()
 
 	ctx = context.Background()
@@ -974,17 +985,16 @@ func (s *Service) runWorker1(ctx context.Context, wg *sync.WaitGroup, stream cha
 				s.retryWriter(data, retryWriter, response)
 			}
 		} else {
-			processed++ //TODO int64 + flushing
-			processed64++
+			*processed++ //TODO int64 + flushing
 		}
 	}
 
-	atomic.AddInt32(&response.Processed, processed)
+	atomic.AddInt32(&response.Processed, *processed)
 	finish := time.Now()
 	timeTaken := finish.Sub(start)
-	qps := float64(processed) / timeTaken.Seconds()
+	qps := float64(*processed) / timeTaken.Seconds()
 
-	fmt.Printf("###worker done - start: %s finish: %s processed %d items in %s QPS: %d \n", start, finish, processed, time.Since(start), qps)
+	fmt.Printf("###worker done - start: %s finish: %s processed %d items in %s QPS: %d \n", start, finish, *processed, time.Since(start), qps)
 }
 
 // ctx & deadline
