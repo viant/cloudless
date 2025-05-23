@@ -180,7 +180,7 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 	//fmt.Printf("!!!!!@@@%s!!!!!@@@\n", s.Config.Mode)
 	switch s.Config.Mode {
 	case SafeCtxMode:
-		//time.Sleep(20 * time.Second)
+		time.Sleep(35 * time.Second)
 		if _, ok := ctx.Deadline(); !ok {
 			deadline := s.Config.Deadline(ctx)
 			var cancel context.CancelFunc
@@ -188,9 +188,9 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 			defer cancel()
 		}
 
-		fmt.Printf("###$$$ s.Config.TestCaseNr == %v\n", s.Config.TestCaseNr)
+		fmt.Printf("AAA ###$$$ s.Config.TestCaseNr == %v\n", s.Config.TestCaseNr)
 
-		fmt.Printf("###$$$ s.Config.Concurrency == %v\n", s.Config.Concurrency)
+		fmt.Printf("AAA ###$$$ s.Config.Concurrency == %v\n", s.Config.Concurrency)
 
 		for i := 0; i < s.Config.Concurrency; i++ {
 			switch s.Config.TestCaseNr {
@@ -289,6 +289,8 @@ func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, reque
 
 	scanDuration := time.Duration(0)
 
+	s1 := time.Now()
+
 	//for scanner.Scan() {
 	for {
 		start := time.Now()
@@ -320,7 +322,9 @@ func (s *Service) loadData(ctx context.Context, waitGroup *sync.WaitGroup, reque
 		response.Loaded++
 	}
 
-	fmt.Printf("Scanner scan duration: %v\n", scanDuration)
+	f1 := time.Now()
+	allDuration := f1.Sub(s1)
+	fmt.Printf("AAA Scanner duration: scan: %v,  unmarshalling: %v, all: %v\n", scanDuration, allDuration-scanDuration, allDuration)
 
 }
 
