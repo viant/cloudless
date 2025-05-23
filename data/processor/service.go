@@ -184,6 +184,9 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 	start1 := time.Now()
 	processed := make([]int32, s.Config.Concurrency)
 
+	fmt.Printf("AAA ###$$$ s.Config.TestCaseNr == %v\n", s.Config.TestCaseNr)
+	fmt.Printf("AAA ###$$$ s.Config.Concurrency == %v\n", s.Config.Concurrency)
+
 	switch s.Config.Mode {
 	case SafeCtxMode:
 		if _, ok := ctx.Deadline(); !ok {
@@ -192,9 +195,6 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 			ctx, cancel = context.WithTimeout(ctx, time.Until(deadline))
 			defer cancel()
 		}
-
-		fmt.Printf("AAA ###$$$ s.Config.TestCaseNr == %v\n", s.Config.TestCaseNr)
-		fmt.Printf("AAA ###$$$ s.Config.Concurrency == %v\n", s.Config.Concurrency)
 
 		for i := 0; i < s.Config.Concurrency; i++ {
 			switch s.Config.TestCaseNr {
@@ -217,7 +217,7 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 
 		go s.setTimeoutChannel(ctx, timeout)
 		for i := 0; i < s.Config.Concurrency; i++ {
-			go s.runWorker(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter, timeout)
+			go s.runWorker(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter, timeout, &processed[i])
 		}
 	}
 
@@ -575,7 +575,7 @@ func (s *Service) loadData3(ctx context.Context, waitGroup *sync.WaitGroup, requ
 	workerWG.Wait()
 }
 
-func (s *Service) runWorker(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer, timeout chan bool) {
+func (s *Service) runWorker(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer, timeout chan bool, processed *int32) {
 	response := reporter.BaseResponse()
 	defer wg.Done()
 	deadline := s.Config.Deadline(ctx)
@@ -601,6 +601,7 @@ func (s *Service) runWorker(ctx context.Context, wg *sync.WaitGroup, stream chan
 				}
 			} else {
 				atomic.AddInt32(&response.Processed, 1)
+				*processed++
 			}
 			done <- true
 			close(done)
