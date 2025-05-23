@@ -209,7 +209,7 @@ func (s *Service) do(ctx context.Context, request *Request, reporter Reporter,
 			case 5:
 				go s.runWorker5(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter)
 			default:
-				go s.runWorkerInSafeCtxMode(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter)
+				go s.runWorkerInSafeCtxMode(ctx, waitGroup, stream, reporter, retryWriter, corruptionWriter, &processed[i])
 			}
 		}
 	default:
@@ -899,11 +899,11 @@ func NewWithMetrics(config *Config, fs afs.Service, processor Processor, reporte
 }
 
 // only ctx
-func (s *Service) runWorkerInSafeCtxMode(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer) {
+func (s *Service) runWorkerInSafeCtxMode(ctx context.Context, wg *sync.WaitGroup, stream chan interface{}, reporter Reporter, retryWriter *Writer, corruptionWriter *Writer, processed *int32) {
 	defer wg.Done()
 	response := reporter.BaseResponse()
 	ctxErrLogged := false
-	var processed int32 = 0 //TODO
+	//var processed int32 = 0 //TODO
 
 	for data := range stream {
 		if err := ctx.Err(); err != nil {
@@ -929,11 +929,11 @@ func (s *Service) runWorkerInSafeCtxMode(ctx context.Context, wg *sync.WaitGroup
 				s.retryWriter(data, retryWriter, response)
 			}
 		} else {
-			processed++
+			*processed++
 		}
 	}
 
-	atomic.AddInt32(&response.Processed, processed)
+	atomic.AddInt32(&response.Processed, *processed)
 
 }
 
